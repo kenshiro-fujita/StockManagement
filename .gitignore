@@ -1,0 +1,42 @@
+# Personal data (trading history, portfolio, etc.)
+data/personal/
+
+# Dependencies
+node_modules/
+vendor/
+.venv/
+__pycache__/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment & secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Package lock files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
