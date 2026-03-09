@@ -2,26 +2,26 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
+const errorMessages: Record<string, string> = {
+  'No token hash or type':
+    '認証リンクが無効です。再度サインアップしてください。',
+  'Email link is invalid or has expired':
+    '認証リンクが無効または期限切れです。再度サインアップしてください。',
+  'Token has expired or is invalid':
+    'トークンが期限切れまたは無効です。再度サインアップしてください。',
+};
+
 async function ErrorContent({
   searchParams,
 }: {
   searchParams: Promise<{ error: string }>;
 }) {
   const params = await searchParams;
+  const message = params?.error
+    ? (errorMessages[params.error] ?? '認証処理中にエラーが発生しました。')
+    : '予期しないエラーが発生しました。';
 
-  return (
-    <>
-      {params?.error ? (
-        <p className="text-sm text-muted-foreground">
-          エラー内容: {params.error}
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          予期しないエラーが発生しました。
-        </p>
-      )}
-    </>
-  );
+  return <p className="text-sm text-muted-foreground">{message}</p>;
 }
 
 export default function Page({

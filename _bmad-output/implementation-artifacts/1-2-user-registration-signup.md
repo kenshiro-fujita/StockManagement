@@ -1,6 +1,6 @@
 # Story 1.2: ユーザー登録（サインアップ）
 
-Status: review
+Status: done
 
 ## Story
 
@@ -254,6 +254,7 @@ Claude Opus 4.6 (claude-opus-4-6)
 |------|--------|--------|
 | 2026-03-09 | Initial story creation | Story 1.2 context engine analysis |
 | 2026-03-09 | All tasks implemented | Dev agent completed Tasks 1-6 |
+| 2026-03-10 | Code review fixes | Supabase エラー日本語化、エラーページ安全化、テスト追加、File List 修正 |
 
 ### File List
 
@@ -261,10 +262,9 @@ Claude Opus 4.6 (claude-opus-4-6)
 |------|--------|-------------|
 | `src/middleware.ts` | 新規作成 | Supabase セッション管理の middleware |
 | `src/lib/schemas/auth.ts` | 新規作成 | Zod バリデーションスキーマ（signUpSchema） |
-| `src/lib/schemas/auth.test.ts` | 新規作成 | Zod スキーマのユニットテスト（7ケース） |
-| `src/components/sign-up-form.tsx` | リファクタリング | RHF + Zod 移行、日本語化、aria-describedby |
-| `src/app/auth/sign-up/page.tsx` | 修正 | リンクテキスト日本語化 |
+| `src/lib/schemas/auth.test.ts` | 新規作成 | Zod スキーマのユニットテスト（8ケース） |
+| `src/components/sign-up-form.tsx` | リファクタリング | RHF + Zod 移行、日本語化、aria-describedby、エラー日本語マッピング |
 | `src/app/auth/sign-up-success/page.tsx` | 書き換え | 日本語化、ログインリンク追加 |
-| `src/app/auth/error/page.tsx` | 書き換え | 日本語化、サインアップ・ログインリンク追加 |
+| `src/app/auth/error/page.tsx` | 書き換え | 日本語化、既知エラーマッピング、サインアップ・ログインリンク追加 |
 | `eslint.config.mjs` | 修正 | `.next/` ディレクトリを ignores に追加 |
 | `tailwind.config.ts` | 修正 | require → ESM import に変換 |

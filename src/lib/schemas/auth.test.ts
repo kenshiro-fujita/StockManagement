@@ -61,6 +61,22 @@ describe('signUpSchema', () => {
     }
   });
 
+  it('空のパスワード（確認）を拒否する', () => {
+    const result = signUpSchema.safeParse({
+      ...validData,
+      confirmPassword: '',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const emptyError = result.error.issues.find(
+        (issue) =>
+          issue.path.includes('confirmPassword') &&
+          issue.message === 'パスワード（確認）を入力してください'
+      );
+      expect(emptyError).toBeDefined();
+    }
+  });
+
   it('パスワード不一致を拒否する', () => {
     const result = signUpSchema.safeParse({
       ...validData,

@@ -26,6 +26,20 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signUpSchema, type SignUpInput } from '@/lib/schemas/auth';
 
+function getJapaneseErrorMessage(error: unknown): string {
+  const message =
+    error instanceof Error ? error.message : 'エラーが発生しました';
+  const errorMap: Record<string, string> = {
+    'User already registered': 'このメールアドレスは既に登録されています',
+    'Signup requires a valid password': '有効なパスワードを入力してください',
+    'Unable to validate email address: invalid format':
+      '有効なメールアドレスを入力してください',
+    'Email rate limit exceeded':
+      'メール送信の制限に達しました。しばらくしてから再度お試しください',
+  };
+  return errorMap[message] ?? 'アカウントの作成に失敗しました';
+}
+
 export function SignUpForm({
   className,
   ...props
@@ -60,9 +74,7 @@ export function SignUpForm({
       if (error) throw error;
       router.push('/auth/sign-up-success');
     } catch (error: unknown) {
-      setServerError(
-        error instanceof Error ? error.message : 'エラーが発生しました'
-      );
+      setServerError(getJapaneseErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
