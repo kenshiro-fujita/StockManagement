@@ -1,6 +1,6 @@
 # Story 1.3: ユーザーログイン・ログアウトとセッション管理
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -42,49 +42,50 @@ so that 安全に自分のデータにアクセスでき、使い終わったら
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: ログインフォームの日本語化と RHF + Zod 移行 (AC: #1, #2, #5, #6)
-  - [ ] 1.1 Zod バリデーションスキーマの追加（`src/lib/schemas/auth.ts` に `loginSchema` を追加）
+- [x] Task 1: ログインフォームの日本語化と RHF + Zod 移行 (AC: #1, #2, #5, #6)
+  - [x] 1.1 Zod バリデーションスキーマの追加（`src/lib/schemas/auth.ts` に `loginSchema` を追加）
     - email: 有効なメールアドレス形式
     - password: 必須（min(1)）— ログインではパスワード長チェック不要
-  - [ ] 1.2 `login-form.tsx` をリファクタリング:
+  - [x] 1.2 `login-form.tsx` をリファクタリング:
     - React Hook Form + Zod resolver に移行（`mode: 'onBlur'`）
     - shadcn/ui `<Form>` コンポーネントに置き換え（`aria-describedby` 自動設定）
     - UI テキストを日本語化（ラベル、エラーメッセージ、ボタン）
     - リダイレクト先を `/protected` → `/stocks` に修正
     - サーバーエラーメッセージを日本語にマッピング（セキュリティ考慮: 汎用メッセージ使用）
-  - [ ] 1.3 ログインページのリンクテキストを日本語化
+  - [x] 1.3 ログインページのリンクテキストを日本語化
 
-- [ ] Task 2: ログアウト機能の実装 (AC: #3)
-  - [ ] 2.1 `src/components/logout-button.tsx` を作成
+- [x] Task 2: ログアウト機能の実装 (AC: #3)
+  - [x] 2.1 `src/components/logout-button.tsx` を更新
     - `supabase.auth.signOut()` を呼び出す
     - ログアウト後 `/auth/login` にリダイレクト
-    - ボタンテキスト: 「ログアウト」
-  - [ ] 2.2 ログアウトボタンの仮配置（ヘッダーまたはフッター）
+    - ボタンテキスト: 「ログアウト」、ローディング状態追加
+  - [x] 2.2 ログアウトボタンの仮配置（`/stocks` ページ）
     - **注意**: Story 1.4 でアプリシェル（サイドバー）に正式配置されるため、現時点では `/stocks` ページに仮配置
 
-- [ ] Task 3: パスワードリセットページの日本語化 (AC: #1)
-  - [ ] 3.1 `forgot-password-form.tsx` の日本語化
+- [x] Task 3: パスワードリセットページの日本語化 (AC: #1)
+  - [x] 3.1 `forgot-password-form.tsx` の日本語化
     - UI テキストを日本語化
     - エラーメッセージを日本語にマッピング
-  - [ ] 3.2 `update-password/page.tsx` の日本語化（存在する場合は update-password-form.tsx も）
+  - [x] 3.2 `update-password-form.tsx` の日本語化
 
-- [ ] Task 4: 未認証リダイレクトの確認 (AC: #4)
-  - [ ] 4.1 `proxy.ts` の既存リダイレクトロジックが正しく動作することを確認
+- [x] Task 4: 未認証リダイレクトの確認 (AC: #4)
+  - [x] 4.1 `proxy.ts` の既存リダイレクトロジックが正しく動作することを確認
     - `/stocks` → 未認証の場合 `/auth/login` にリダイレクト
     - `/auth/*` → 認証不要
-  - [ ] 4.2 ビルド確認（`npm run build`）
+  - [x] 4.2 ビルド確認（`npm run build`）— 成功
 
-- [ ] Task 5: テスト (AC: #1, #2, #5)
-  - [ ] 5.1 `loginSchema` のユニットテスト（`src/lib/schemas/auth.test.ts` に追加）
+- [x] Task 5: テスト (AC: #1, #2, #5)
+  - [x] 5.1 `loginSchema` のユニットテスト（`src/lib/schemas/auth.test.ts` に追加）
     - 有効なデータの通過
     - 空のメールアドレスの拒否
     - 無効なメールアドレスの拒否
     - 空のパスワードの拒否
-  - [ ] 5.2 全テスト実行確認（`npm test`）
+    - 短いパスワードの受け付け（ログインでは長さチェック不要）
+  - [x] 5.2 全テスト実行確認 — 13テスト全パス
 
-- [ ] Task 6: 動作確認 (AC: #1, #2, #3, #4, #5, #6)
-  - [ ] 6.1 Prettier フォーマット適用
-  - [ ] 6.2 ESLint チェック通過確認
+- [x] Task 6: 動作確認 (AC: #1, #2, #3, #4, #5, #6)
+  - [x] 6.1 Prettier フォーマット適用
+  - [x] 6.2 ESLint チェック通過確認
 
 ## Dev Notes
 
@@ -256,16 +257,37 @@ PRでのセルフチェック項目：
 
 ### Agent Model Used
 
-(to be filled by dev agent)
+Claude Opus 4.6
 
 ### Debug Log References
 
+なし
+
 ### Completion Notes List
+
+- loginSchema を auth.ts に追加（パスワード長チェックなし、min(1)のみ）
+- login-form.tsx を RHF + Zod + shadcn/ui Form に全面リファクタリング、日本語化完了
+- logout-button.tsx は既存スターターテンプレートを更新（新規作成ではなく）、ローディング状態追加
+- forgot-password-form.tsx と update-password-form.tsx を日本語化、エラー表示を text-destructive + role="alert" に統一
+- proxy.ts の未認証リダイレクトロジックは既存のまま正常動作を確認
+- loginSchema のユニットテスト5件追加（合計13テスト全パス）
+- ビルド成功、Prettier/ESLint クリア
 
 ### Change Log
 
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-03-10 | Initial story creation | Story 1.3 context engine analysis |
+| 2026-03-10 | Implementation complete | All tasks 1-6 completed |
 
 ### File List
+
+| ファイル | 変更種別 |
+|---------|---------|
+| `src/lib/schemas/auth.ts` | 変更（loginSchema, LoginInput 追加） |
+| `src/lib/schemas/auth.test.ts` | 変更（loginSchema テスト5件追加） |
+| `src/components/login-form.tsx` | 変更（RHF + Zod 移行、日本語化） |
+| `src/components/logout-button.tsx` | 変更（日本語化、ローディング状態追加） |
+| `src/components/forgot-password-form.tsx` | 変更（日本語化） |
+| `src/components/update-password-form.tsx` | 変更（日本語化、リダイレクト先修正） |
+| `src/app/stocks/page.tsx` | 変更（LogoutButton 仮配置） |

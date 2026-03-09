@@ -1,5 +1,52 @@
 import { describe, it, expect } from 'vitest';
-import { signUpSchema } from './auth';
+import { signUpSchema, loginSchema } from './auth';
+
+describe('loginSchema', () => {
+  const validData = {
+    email: 'test@example.com',
+    password: 'password123',
+  };
+
+  it('有効なデータを受け付ける', () => {
+    const result = loginSchema.safeParse(validData);
+    expect(result.success).toBe(true);
+  });
+
+  it('空のメールアドレスを拒否する', () => {
+    const result = loginSchema.safeParse({ ...validData, email: '' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        'メールアドレスを入力してください'
+      );
+    }
+  });
+
+  it('無効なメールアドレスを拒否する', () => {
+    const result = loginSchema.safeParse({ ...validData, email: 'invalid' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        '有効なメールアドレスを入力してください'
+      );
+    }
+  });
+
+  it('空のパスワードを拒否する', () => {
+    const result = loginSchema.safeParse({ ...validData, password: '' });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        'パスワードを入力してください'
+      );
+    }
+  });
+
+  it('短いパスワードでも受け付ける（ログインでは長さチェック不要）', () => {
+    const result = loginSchema.safeParse({ ...validData, password: 'a' });
+    expect(result.success).toBe(true);
+  });
+});
 
 describe('signUpSchema', () => {
   const validData = {
