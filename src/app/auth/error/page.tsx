@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import Link from 'next/link';
 import { Suspense } from 'react';
 
 async function ErrorContent({
@@ -12,11 +13,11 @@ async function ErrorContent({
     <>
       {params?.error ? (
         <p className="text-sm text-muted-foreground">
-          Code error: {params.error}
+          エラー内容: {params.error}
         </p>
       ) : (
         <p className="text-sm text-muted-foreground">
-          An unspecified error occurred.
+          予期しないエラーが発生しました。
         </p>
       )}
     </>
@@ -34,14 +35,26 @@ export default function Page({
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-2xl">
-                Sorry, something went wrong.
-              </CardTitle>
+              <CardTitle className="text-2xl">エラーが発生しました</CardTitle>
             </CardHeader>
             <CardContent>
               <Suspense>
                 <ErrorContent searchParams={searchParams} />
               </Suspense>
+              <div className="mt-4 flex flex-col gap-2 text-center text-sm">
+                <Link
+                  href="/auth/sign-up"
+                  className="underline underline-offset-4"
+                >
+                  アカウント作成
+                </Link>
+                <Link
+                  href="/auth/login"
+                  className="underline underline-offset-4"
+                >
+                  ログイン
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </div>

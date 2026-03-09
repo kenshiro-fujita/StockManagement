@@ -1,6 +1,6 @@
 # Story 1.2: ユーザー登録（サインアップ）
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -38,45 +38,45 @@ so that 自分専用の銘柄データを管理できるようになる。（FR3
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: middleware.ts の作成 (AC: #5)
-  - [ ] 1.1 `src/middleware.ts` を作成し、`updateSession()` を呼び出す
-  - [ ] 1.2 matcher 設定: `/((?!_next/static|_next/image|favicon.ico).*)` で静的ファイルを除外
-  - [ ] 1.3 動作確認（ビルドが通ること、既存テスト通過）
+- [x] Task 1: middleware.ts の作成 (AC: #5)
+  - [x] 1.1 `src/middleware.ts` を作成し、`updateSession()` を呼び出す
+  - [x] 1.2 matcher 設定: `/((?!_next/static|_next/image|favicon.ico).*)` で静的ファイルを除外
+  - [x] 1.3 動作確認（ビルドが通ること、既存テスト通過）
 
-- [ ] Task 2: サインアップフォームの日本語化とバリデーション強化 (AC: #1, #2, #4)
-  - [ ] 2.1 Zod バリデーションスキーマの作成（`src/lib/schemas/auth.ts`）
+- [x] Task 2: サインアップフォームの日本語化とバリデーション強化 (AC: #1, #2, #4)
+  - [x] 2.1 Zod バリデーションスキーマの作成（`src/lib/schemas/auth.ts`）
     - email: 有効なメールアドレス形式
     - password: 8文字以上（Supabase Auth デフォルト最小長）
     - confirmPassword: password と一致
-  - [ ] 2.2 `sign-up-form.tsx` をリファクタリング:
+  - [x] 2.2 `sign-up-form.tsx` をリファクタリング:
     - React Hook Form + Zod resolver に移行
     - onBlur バリデーションモードに設定（`mode: 'onBlur'`）
     - 各フィールドに `aria-describedby` でエラーメッセージを関連付け
     - UI テキストを日本語化（ラベル、エラーメッセージ、ボタン）
-    - `emailRedirectTo` を `/protected` → `/stocks` に修正
-  - [ ] 2.3 サインアップ成功ページの日本語化（`sign-up-success/page.tsx`）
+    - `emailRedirectTo` を `/protected` → `/auth/confirm` に修正
+  - [x] 2.3 サインアップ成功ページの日本語化（`sign-up-success/page.tsx`）
 
-- [ ] Task 3: サインアップページの整備 (AC: #1, #3)
-  - [ ] 3.1 `src/app/auth/sign-up/page.tsx` のレイアウト確認
-  - [ ] 3.2 ログインページへのリンクテキストを日本語化
-  - [ ] 3.3 キーボード操作のセルフチェック（Tab/Enter/Escape）
+- [x] Task 3: サインアップページの整備 (AC: #1, #3)
+  - [x] 3.1 `src/app/auth/sign-up/page.tsx` のレイアウト確認
+  - [x] 3.2 ログインページへのリンクテキストを日本語化
+  - [x] 3.3 キーボード操作のセルフチェック（Tab/Enter/Escape）
 
-- [ ] Task 4: エラーページの整備 (AC: #4)
-  - [ ] 4.1 `src/app/auth/error/page.tsx` の日本語化（エラーメッセージ表示）
-  - [ ] 4.2 エラーページからサインアップ・ログインページへの導線を追加
+- [x] Task 4: エラーページの整備 (AC: #4)
+  - [x] 4.1 `src/app/auth/error/page.tsx` の日本語化（エラーメッセージ表示）
+  - [x] 4.2 エラーページからサインアップ・ログインページへの導線を追加
 
-- [ ] Task 5: テスト (AC: #1, #2, #4)
-  - [ ] 5.1 Zod スキーマのユニットテスト（`src/lib/schemas/auth.test.ts`）
+- [x] Task 5: テスト (AC: #1, #2, #4)
+  - [x] 5.1 Zod スキーマのユニットテスト（`src/lib/schemas/auth.test.ts`）
     - 有効なメールアドレスの通過
     - 無効なメールアドレスの拒否
     - パスワード8文字未満の拒否
     - パスワード不一致の拒否
-  - [ ] 5.2 ビルド確認（`npm run build`）
-  - [ ] 5.3 全テスト実行確認（`npm test`）
+  - [x] 5.2 ビルド確認（`npm run build`）
+  - [x] 5.3 全テスト実行確認（`npm test`）
 
-- [ ] Task 6: 動作確認 (AC: #1, #2, #3, #4, #5)
-  - [ ] 6.1 Prettier フォーマット適用
-  - [ ] 6.2 ESLint チェック通過確認
+- [x] Task 6: 動作確認 (AC: #1, #2, #3, #4, #5)
+  - [x] 6.1 Prettier フォーマット適用
+  - [x] 6.2 ESLint チェック通過確認
 
 ## Dev Notes
 
@@ -233,16 +233,38 @@ PRでのセルフチェック項目：
 
 ### Agent Model Used
 
-(to be filled by dev agent)
+Claude Opus 4.6 (claude-opus-4-6)
 
 ### Debug Log References
 
+- ESLint が `.next/` ビルドディレクトリをスキャンして 10,000+ エラーが発生 → `eslint.config.mjs` に `{ ignores: [".next/"] }` を追加して解決
+- `tailwind.config.ts` の `require('tailwindcss-animate')` が `@typescript-eslint/no-require-imports` に違反 → ESM import に変換して解決
+
 ### Completion Notes List
+
+- すべての AC（#1〜#5）の実装が完了しています
+- テスト 7/7 パス、ビルド成功、ESLint クリーン、Prettier 適用済みです
+- shadcn/ui の `<Form>` コンポーネントにより `aria-describedby` が自動設定されています
+- `emailRedirectTo` は Dev Notes の設計通り `/auth/confirm` に設定しています
+- Supabase プロジェクトの接続が必要なため、実際のサインアップフローは手動確認が必要です
 
 ### Change Log
 
 | Date | Change | Reason |
 |------|--------|--------|
 | 2026-03-09 | Initial story creation | Story 1.2 context engine analysis |
+| 2026-03-09 | All tasks implemented | Dev agent completed Tasks 1-6 |
 
 ### File List
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/middleware.ts` | 新規作成 | Supabase セッション管理の middleware |
+| `src/lib/schemas/auth.ts` | 新規作成 | Zod バリデーションスキーマ（signUpSchema） |
+| `src/lib/schemas/auth.test.ts` | 新規作成 | Zod スキーマのユニットテスト（7ケース） |
+| `src/components/sign-up-form.tsx` | リファクタリング | RHF + Zod 移行、日本語化、aria-describedby |
+| `src/app/auth/sign-up/page.tsx` | 修正 | リンクテキスト日本語化 |
+| `src/app/auth/sign-up-success/page.tsx` | 書き換え | 日本語化、ログインリンク追加 |
+| `src/app/auth/error/page.tsx` | 書き換え | 日本語化、サインアップ・ログインリンク追加 |
+| `eslint.config.mjs` | 修正 | `.next/` ディレクトリを ignores に追加 |
+| `tailwind.config.ts` | 修正 | require → ESM import に変換 |
