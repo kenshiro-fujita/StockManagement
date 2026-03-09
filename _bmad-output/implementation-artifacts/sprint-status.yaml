@@ -42,7 +42,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   1-1-project-scaffold-dev-tooling: done
-  1-2-user-registration-signup: backlog
+  1-2-user-registration-signup: ready-for-dev
   1-3-user-login-logout-session: backlog
   1-4-authenticated-app-shell-layout: backlog
   epic-1-retrospective: optional
