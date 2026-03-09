@@ -1,6 +1,6 @@
 # Story 1.1: プロジェクトスキャフォールドと開発ツール基盤
 
-Status: review
+Status: done
 
 ## Story
 
@@ -239,6 +239,8 @@ Claude Opus 4.6 (claude-opus-4-6)
 - `.prettierrc` — Prettier 設定
 - `.env.example` — 環境変数テンプレート
 - `.gitignore` — Git 除外設定（更新）
+- `.prettierrc` — Prettier 設定
+- `.prettierignore` — Prettier 除外設定
 - `package.json` — 依存関係・スクリプト（更新）
 - `tsconfig.json` — TypeScript 設定（パスエイリアス更新）
 - `components.json` — shadcn/ui 設定（CSS パス更新）
@@ -257,6 +259,7 @@ Claude Opus 4.6 (claude-opus-4-6)
 - `src/components/layout/.gitkeep` — レイアウトコンポーネントディレクトリ
 - `src/lib/supabase/client.ts` — Supabase クライアント（スターター提供）
 - `src/lib/supabase/server.ts` — Supabase サーバー（スターター提供）
+- `src/lib/supabase/proxy.ts` — Supabase セッション更新ユーティリティ（スターター提供、Story 1.2-1.3 で middleware.ts から呼出予定）
 - `src/lib/calc/.gitkeep` — 計算エンジンディレクトリ
 - `src/lib/schemas/.gitkeep` — Zod スキーマディレクトリ
 - `src/lib/types/.gitkeep` — TypeScript 型定義ディレクトリ
@@ -264,4 +267,3 @@ Claude Opus 4.6 (claude-opus-4-6)
 - `src/lib/utils.test.ts` — ユーティリティテスト
 - `src/actions/.gitkeep` — Server Actions ディレクトリ
 - `src/utils/.gitkeep` — 汎用ユーティリティディレクトリ
-- `src/middleware.ts` — Next.js ミドルウェア（Supabase セッション更新）
