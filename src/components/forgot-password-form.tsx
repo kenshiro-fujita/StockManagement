@@ -15,6 +15,18 @@ import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useState } from 'react';
 
+function getJapaneseResetError(error: unknown): string {
+  const message =
+    error instanceof Error ? error.message : 'エラーが発生しました';
+  const errorMap: Record<string, string> = {
+    'For security purposes, you can only request this once every 60 seconds':
+      'セキュリティのため、リクエストは60秒に1回のみ可能です',
+    'Unable to validate email address: invalid format':
+      '有効なメールアドレスを入力してください',
+  };
+  return errorMap[message] ?? 'パスワードリセットに失敗しました';
+}
+
 export function ForgotPasswordForm({
   className,
   ...props
@@ -37,7 +49,7 @@ export function ForgotPasswordForm({
       if (error) throw error;
       setSuccess(true);
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'エラーが発生しました');
+      setError(getJapaneseResetError(error));
     } finally {
       setIsLoading(false);
     }

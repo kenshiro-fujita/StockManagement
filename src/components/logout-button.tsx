@@ -13,8 +13,12 @@ export function LogoutButton() {
     const supabase = createClient();
     setIsLoading(true);
 
-    await supabase.auth.signOut();
-    router.push('/auth/login');
+    try {
+      await supabase.auth.signOut();
+      router.push('/auth/login');
+    } catch {
+      setIsLoading(false);
+    }
   };
 
   return (

@@ -15,6 +15,18 @@ import { Label } from '@/components/ui/label';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+function getJapaneseUpdatePasswordError(error: unknown): string {
+  const message =
+    error instanceof Error ? error.message : 'エラーが発生しました';
+  const errorMap: Record<string, string> = {
+    'New password should be different from the old password':
+      '新しいパスワードは現在のパスワードと異なるものにしてください',
+    'Password should be at least 6 characters':
+      'パスワードは6文字以上で入力してください',
+  };
+  return errorMap[message] ?? 'パスワードの更新に失敗しました';
+}
+
 export function UpdatePasswordForm({
   className,
   ...props
@@ -35,7 +47,7 @@ export function UpdatePasswordForm({
       if (error) throw error;
       router.push('/stocks');
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'エラーが発生しました');
+      setError(getJapaneseUpdatePasswordError(error));
     } finally {
       setIsLoading(false);
     }

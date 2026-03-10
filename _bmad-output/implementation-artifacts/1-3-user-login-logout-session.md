@@ -1,6 +1,6 @@
 # Story 1.3: ユーザーログイン・ログアウトとセッション管理
 
-Status: review
+Status: done
 
 ## Story
 
@@ -279,6 +279,7 @@ Claude Opus 4.6
 |------|--------|--------|
 | 2026-03-10 | Initial story creation | Story 1.3 context engine analysis |
 | 2026-03-10 | Implementation complete | All tasks 1-6 completed |
+| 2026-03-10 | Code review fixes | 3 issues fixed: Japanese error mapping for forgot-password/update-password, logout error handling |
 
 ### File List
 
