@@ -44,7 +44,7 @@ development_status:
   1-1-project-scaffold-dev-tooling: done
   1-2-user-registration-signup: done
   1-3-user-login-logout-session: done
-  1-4-authenticated-app-shell-layout: backlog
+  1-4-authenticated-app-shell-layout: review
   epic-1-retrospective: optional
 
   epic-2: backlog
