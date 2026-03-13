@@ -18,6 +18,12 @@ export const createStockSchema = z.object({
 
 export type CreateStockInput = z.infer<typeof createStockSchema>;
 
+export const updateStockSchema = createStockSchema.extend({
+  id: z.uuid({ error: '無効なIDです' }),
+});
+
+export type UpdateStockInput = z.infer<typeof updateStockSchema>;
+
 export const MARKET_OPTIONS = [
   '東証プライム',
   '東証スタンダード',

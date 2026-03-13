@@ -1,9 +1,13 @@
 import { Suspense } from 'react';
 import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
@@ -32,7 +36,25 @@ export default function StocksLayout({
         } as React.CSSProperties
       }
     >
-      <Suspense fallback={<AppSidebar />}>
+      <Suspense
+        fallback={
+          <Sidebar>
+            <SidebarHeader>
+              <div className="flex items-center gap-2 px-2 py-1">
+                <span className="text-sidebar-foreground text-lg font-bold">
+                  StockManagement
+                </span>
+              </div>
+            </SidebarHeader>
+            <SidebarContent>
+              <div className="space-y-2 p-4">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            </SidebarContent>
+          </Sidebar>
+        }
+      >
         <SidebarWithStocks />
       </Suspense>
       <SidebarInset>

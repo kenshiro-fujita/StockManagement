@@ -26,24 +26,35 @@ import {
 import {
   createStockSchema,
   type CreateStockInput,
+  updateStockSchema,
   MARKET_OPTIONS,
   SECTOR_OPTIONS,
 } from '@/lib/schemas/stocks';
-import { createStock } from '@/actions/stocks';
+import { createStock, updateStock } from '@/actions/stocks';
 
-export function StockForm() {
+type StockData = {
+  id: string;
+  stock_code: string;
+  company_name: string;
+  market: string | null;
+  sector: string | null;
+  business_segment: string | null;
+};
+
+export function StockForm({ stock }: { stock?: StockData }) {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const isEditMode = !!stock;
 
   const form = useForm<CreateStockInput>({
-    resolver: zodResolver(createStockSchema),
+    resolver: zodResolver(isEditMode ? updateStockSchema : createStockSchema),
     mode: 'onBlur',
     defaultValues: {
-      stock_code: '',
-      company_name: '',
-      market: undefined,
-      sector: undefined,
-      business_segment: '',
+      stock_code: stock?.stock_code ?? '',
+      company_name: stock?.company_name ?? '',
+      market: stock?.market ?? undefined,
+      sector: stock?.sector ?? undefined,
+      business_segment: stock?.business_segment ?? '',
     },
   });
 
@@ -51,17 +62,23 @@ export function StockForm() {
     setIsLoading(true);
 
     try {
-      const result = await createStock(data);
+      const result = isEditMode
+        ? await updateStock({ ...data, id: stock.id })
+        : await createStock(data);
 
       if (!result.success) {
         toast.error(result.error);
         return;
       }
 
-      toast.success('銘柄を登録しました');
-      router.push('/stocks');
+      toast.success(
+        isEditMode ? '銘柄情報を更新しました' : '銘柄を登録しました'
+      );
+      router.push(isEditMode ? `/stocks/${stock.id}` : '/stocks');
     } catch {
-      toast.error('銘柄の登録に失敗しました');
+      toast.error(
+        isEditMode ? '銘柄情報の更新に失敗しました' : '銘柄の登録に失敗しました'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -168,12 +185,20 @@ export function StockForm() {
 
         <div className="flex gap-3">
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? '登録中...' : '銘柄を登録する'}
+            {isLoading
+              ? isEditMode
+                ? '更新中...'
+                : '登録中...'
+              : isEditMode
+                ? '更新する'
+                : '銘柄を登録する'}
           </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push('/stocks')}
+            onClick={() =>
+              router.push(isEditMode ? `/stocks/${stock.id}` : '/stocks')
+            }
           >
             キャンセル
           </Button>

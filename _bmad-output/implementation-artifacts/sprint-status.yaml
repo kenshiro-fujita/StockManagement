@@ -47,10 +47,10 @@ development_status:
   1-4-authenticated-app-shell-layout: done
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-stock-registration: done
   2-2-stock-list-view: done
-  2-3-stock-edit-delete: backlog
+  2-3-stock-edit-delete: done
   epic-2-retrospective: optional
 
   epic-3: backlog

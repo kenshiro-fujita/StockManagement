@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createStockSchema } from './stocks';
+import { createStockSchema, updateStockSchema } from './stocks';
 
 describe('createStockSchema', () => {
   const validData = {
@@ -55,9 +55,7 @@ describe('createStockSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
-        '企業名を入力してください'
-      );
+      expect(result.error.issues[0].message).toBe('企業名を入力してください');
     }
   });
 
@@ -101,5 +99,54 @@ describe('createStockSchema', () => {
       expect(result.data.sector).toBeUndefined();
       expect(result.data.business_segment).toBeUndefined();
     }
+  });
+});
+
+describe('updateStockSchema', () => {
+  const validUUID = '550e8400-e29b-41d4-a716-446655440000';
+  const validData = {
+    id: validUUID,
+    stock_code: '7203',
+    company_name: 'トヨタ自動車',
+  };
+
+  it('有効なUUID付きデータを受け付ける', () => {
+    const result = updateStockSchema.safeParse(validData);
+    expect(result.success).toBe(true);
+  });
+
+  it('全項目入力で有効なデータを受け付ける', () => {
+    const result = updateStockSchema.safeParse({
+      ...validData,
+      market: '東証プライム',
+      sector: '輸送用機器',
+      business_segment: '自動車',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('idが無い場合を拒否する', () => {
+    const result = updateStockSchema.safeParse({
+      stock_code: '7203',
+      company_name: 'トヨタ自動車',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('無効なUUID形式を拒否する', () => {
+    const result = updateStockSchema.safeParse({
+      ...validData,
+      id: 'not-a-uuid',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('createStockSchemaのバリデーションも継承する', () => {
+    const result = updateStockSchema.safeParse({
+      id: validUUID,
+      stock_code: '',
+      company_name: 'トヨタ自動車',
+    });
+    expect(result.success).toBe(false);
   });
 });
