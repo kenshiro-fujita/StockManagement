@@ -44,7 +44,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton isActive={pathname === '/stocks'} asChild>
+                <SidebarMenuButton isActive={pathname.startsWith('/stocks')} asChild>
                   <Link href="/stocks">
                     <LayoutList />
                     <span>銘柄一覧</span>
@@ -87,6 +87,7 @@ function SidebarLogoutButton() {
 
     try {
       await supabase.auth.signOut();
+      router.refresh();
       router.push('/auth/login');
     } catch {
       setIsLoading(false);

@@ -1,6 +1,6 @@
 # Story 1.4: 認証済みアプリシェルとレイアウト
 
-Status: review
+Status: done
 
 ## Story
 
@@ -226,6 +226,7 @@ Claude Opus 4.6
 |------|--------|--------|
 | 2026-03-10 | Initial story creation | Story 1.4 context engine analysis |
 | 2026-03-10 | Implementation complete | All tasks 1-5 completed |
+| 2026-03-13 | Code review fixes | 5 issues fixed: dead code removal, isActive startsWith, router.refresh, File List correction |
 
 ### File List
 
@@ -235,10 +236,9 @@ Claude Opus 4.6
 | `src/components/ui/separator.tsx` | 新規（shadcn/ui インストール） |
 | `src/components/ui/skeleton.tsx` | 新規（shadcn/ui インストール） |
 | `src/hooks/use-mobile.ts` | 新規（shadcn/ui インストール） |
-| `src/components/ui/button.tsx` | 変更（shadcn/ui 更新） |
-| `src/components/ui/sheet.tsx` | 変更（shadcn/ui 更新） |
-| `src/components/ui/tooltip.tsx` | 変更（shadcn/ui 更新） |
 | `src/components/ui/input.tsx` | 変更（shadcn/ui 更新） |
+| `src/components/logout-button.tsx` | 削除（サイドバーに統合） |
+| `src/components/auth-button.tsx` | 削除（未使用スターターテンプレート残骸） |
 | `src/app/globals.css` | 変更（サイドバー CSS 変数をティールテーマに更新） |
 | `src/app/stocks/layout.tsx` | 新規（サイドバー付きレイアウト） |
 | `src/components/layout/app-sidebar.tsx` | 新規（サイドバー本体） |
