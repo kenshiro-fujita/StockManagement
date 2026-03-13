@@ -49,7 +49,7 @@ development_status:
 
   epic-2: in-progress
   2-1-stock-registration: done
-  2-2-stock-list-view: backlog
+  2-2-stock-list-view: done
   2-3-stock-edit-delete: backlog
   epic-2-retrospective: optional
 

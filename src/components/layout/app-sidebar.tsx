@@ -22,7 +22,13 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 
-export function AppSidebar() {
+type SidebarStock = {
+  id: string;
+  stock_code: string;
+  company_name: string;
+};
+
+export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
   const pathname = usePathname();
 
   return (
@@ -44,7 +50,10 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton isActive={pathname.startsWith('/stocks')} asChild>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/stocks')}
+                  asChild
+                >
                   <Link href="/stocks">
                     <LayoutList />
                     <span>銘柄一覧</span>
@@ -55,13 +64,35 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* 銘柄リスト（Empty State） */}
+        {/* 銘柄リスト */}
         <SidebarGroup>
           <SidebarGroupLabel>銘柄リスト</SidebarGroupLabel>
           <SidebarGroupContent>
-            <p className="px-2 py-4 text-sm text-muted-foreground">
-              銘柄を登録しましょう
-            </p>
+            {stocks.length === 0 ? (
+              <p className="px-2 py-4 text-sm text-muted-foreground">
+                銘柄を登録しましょう
+              </p>
+            ) : (
+              <SidebarMenu>
+                {stocks.map((stock) => (
+                  <SidebarMenuItem key={stock.id}>
+                    <SidebarMenuButton
+                      isActive={pathname === `/stocks/${stock.id}`}
+                      asChild
+                    >
+                      <Link href={`/stocks/${stock.id}`}>
+                        <span className="truncate">
+                          {stock.stock_code} {stock.company_name}
+                        </span>
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          —
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
