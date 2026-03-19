@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type FieldErrors, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { ChevronsUpDown } from 'lucide-react';
+import { AlertTriangle, ChevronsUpDown } from 'lucide-react';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,11 +66,19 @@ const NO_CONVERSION_FIELDS = new Set([
   'current_stock_price',
 ]);
 
+export type ExistingPeriod = {
+  fiscal_year: number;
+  fiscal_quarter: string;
+  consolidation_type: string;
+};
+
 export function FinancialDataForm({
   stockId,
+  existingPeriods = [],
   onSuccess,
 }: {
   stockId: string;
+  existingPeriods?: ExistingPeriod[];
   onSuccess?: () => void;
 }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +92,7 @@ export function FinancialDataForm({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(createFinancialDataSchema) as any,
     mode: 'onBlur',
+    shouldFocusError: true,
     defaultValues: {
       stock_id: stockId,
       fiscal_year: currentYear,
@@ -104,6 +114,36 @@ export function FinancialDataForm({
   });
 
   const selectedUnit = form.watch('input_unit');
+  const watchedYear = form.watch('fiscal_year');
+  const watchedQuarter = form.watch('fiscal_quarter');
+  const watchedType = form.watch('consolidation_type');
+
+  const isDuplicate = useMemo(
+    () =>
+      existingPeriods.some(
+        (p) =>
+          p.fiscal_year === watchedYear &&
+          p.fiscal_quarter === watchedQuarter &&
+          p.consolidation_type === watchedType
+      ),
+    [existingPeriods, watchedYear, watchedQuarter, watchedType]
+  );
+
+  // Open Collapsible automatically when optional fields have validation errors
+  const onInvalid = useCallback(
+    (errors: FieldErrors<FormValues>) => {
+      const optionalFieldNames: Set<string> = new Set(
+        OPTIONAL_FIELDS.map((f) => f.name)
+      );
+      const hasOptionalError = Object.keys(errors).some((key) =>
+        optionalFieldNames.has(key)
+      );
+      if (hasOptionalError && !optionalOpen) {
+        setOptionalOpen(true);
+      }
+    },
+    [optionalOpen]
+  );
 
   const onSubmit = useCallback(async () => {
     if (isLoading) return;
@@ -137,12 +177,12 @@ export function FinancialDataForm({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        form.handleSubmit(onSubmit)();
+        form.handleSubmit(onSubmit, onInvalid)();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [form, onSubmit]);
+  }, [form, onSubmit, onInvalid]);
 
   const unitLabel = (fieldName: string) => {
     if (NO_CONVERSION_FIELDS.has(fieldName)) {
@@ -153,7 +193,16 @@ export function FinancialDataForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
+        {isDuplicate && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              この期間のデータは既に登録されています。既存データを編集する場合は一覧から選択してください。
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Period attributes */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <FormField

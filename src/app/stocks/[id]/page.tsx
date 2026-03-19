@@ -67,6 +67,12 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
 
   const hasFinancialData = sortedFinancialData && sortedFinancialData.length > 0;
 
+  const existingPeriods = (financialData ?? []).map((d) => ({
+    fiscal_year: d.fiscal_year,
+    fiscal_quarter: d.fiscal_quarter,
+    consolidation_type: d.consolidation_type,
+  }));
+
   const financialContent = (
     <div className="space-y-8">
       {hasFinancialData ? (
@@ -78,14 +84,14 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
               新しい期間のデータを追加する
             </summary>
             <div className="mt-4">
-              <FinancialDataForm stockId={stock.id} />
+              <FinancialDataForm stockId={stock.id} existingPeriods={existingPeriods} />
             </div>
           </details>
         </>
       ) : (
         <>
           <FinancialDataEmpty />
-          <FinancialDataForm stockId={stock.id} />
+          <FinancialDataForm stockId={stock.id} existingPeriods={existingPeriods} />
         </>
       )}
     </div>

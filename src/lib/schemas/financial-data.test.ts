@@ -133,4 +133,73 @@ describe('createFinancialDataSchema', () => {
       expect(result.data.net_income).toBe(-30000);
     }
   });
+
+  // --- Business logic validation (Story 3.2) ---
+
+  it('売上高が負の値の場合にエラーを返す', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      revenue: '-100',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const revenueError = result.error.issues.find(
+        (i) => i.path[0] === 'revenue'
+      );
+      expect(revenueError?.message).toBe(
+        '売上高は0以上の値を入力してください'
+      );
+    }
+  });
+
+  it('売上高が0の場合は受け付ける', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      revenue: '0',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('総資産が0の場合にエラーを返す', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      total_assets: '0',
+      equity: '0',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const totalAssetsError = result.error.issues.find(
+        (i) => i.path[0] === 'total_assets'
+      );
+      expect(totalAssetsError?.message).toBe(
+        '総資産は0より大きい値を入力してください'
+      );
+    }
+  });
+
+  it('自己資本が総資産を超える場合にエラーを返す', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      total_assets: '1000000',
+      equity: '2000000',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const equityError = result.error.issues.find(
+        (i) => i.path[0] === 'equity'
+      );
+      expect(equityError?.message).toBe(
+        '自己資本が総資産を超えています。入力値を確認してください'
+      );
+    }
+  });
+
+  it('自己資本が総資産と等しい場合は受け付ける', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      total_assets: '5000000',
+      equity: '5000000',
+    });
+    expect(result.success).toBe(true);
+  });
 });
