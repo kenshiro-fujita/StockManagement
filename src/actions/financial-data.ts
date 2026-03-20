@@ -8,12 +8,24 @@ import {
 } from '@/lib/schemas/financial-data';
 import { toYen, type InputUnit } from '@/lib/utils/unit-conversion';
 
-export async function createFinancialData(
-  data: CreateFinancialDataInput
-): Promise<{ success: boolean; error?: string }> {
+// Fields subject to unit conversion (all amount fields except shares/price)
+const CONVERT_FIELDS = [
+  'revenue',
+  'operating_income',
+  'net_income',
+  'total_assets',
+  'equity',
+  'interest_bearing_debt',
+  'operating_cf',
+  'investing_cf',
+  'interest_expense',
+] as const;
+
+/** Shared parse + convert + auth logic for create and update */
+async function parseAndConvert(data: CreateFinancialDataInput) {
   const parsed = createFinancialDataSchema.safeParse(data);
   if (!parsed.success) {
-    return { success: false, error: '入力内容に誤りがあります' };
+    return { ok: false as const, error: '入力内容に誤りがあります' };
   }
 
   const supabase = await createClient();
@@ -22,36 +34,18 @@ export async function createFinancialData(
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, error: '認証が必要です' };
+    return { ok: false as const, error: '認証が必要です' };
   }
 
   const unit = parsed.data.input_unit as InputUnit;
 
-  // Unit conversion fields (convert to yen)
-  const convertFields = [
-    'revenue',
-    'operating_income',
-    'net_income',
-    'total_assets',
-    'equity',
-    'interest_bearing_debt',
-    'operating_cf',
-    'investing_cf',
-    'interest_expense',
-  ] as const;
-
-  // Fields that are NOT subject to unit conversion
-  // shares_outstanding: stored as share count
-  // current_stock_price: always in yen
-
   const converted: Record<string, number | null> = {};
-  for (const field of convertFields) {
+  for (const field of CONVERT_FIELDS) {
     const val = parsed.data[field];
     converted[field] = val != null ? toYen(val, unit) : null;
   }
 
-  const { error } = await supabase.from('financial_data').insert({
-    user_id: user.id,
+  const row = {
     stock_id: parsed.data.stock_id,
     fiscal_year: parsed.data.fiscal_year,
     fiscal_quarter: parsed.data.fiscal_quarter,
@@ -68,6 +62,24 @@ export async function createFinancialData(
     interest_expense: converted.interest_expense,
     current_stock_price: parsed.data.current_stock_price ?? null,
     input_unit: parsed.data.input_unit,
+  };
+
+  return { ok: true as const, supabase, user, parsed, row };
+}
+
+export async function createFinancialData(
+  data: CreateFinancialDataInput
+): Promise<{ success: boolean; error?: string }> {
+  const result = await parseAndConvert(data);
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
+
+  const { supabase, user, parsed, row } = result;
+
+  const { error } = await supabase.from('financial_data').insert({
+    user_id: user.id,
+    ...row,
   });
 
   if (error?.code === '23505') {
@@ -78,6 +90,31 @@ export async function createFinancialData(
   }
   if (error) {
     return { success: false, error: '財務データの保存に失敗しました' };
+  }
+
+  revalidatePath(`/stocks/${parsed.data.stock_id}`);
+  return { success: true };
+}
+
+export async function updateFinancialData(
+  id: string,
+  data: CreateFinancialDataInput
+): Promise<{ success: boolean; error?: string }> {
+  const result = await parseAndConvert(data);
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
+
+  const { supabase, user, parsed, row } = result;
+
+  const { error } = await supabase
+    .from('financial_data')
+    .update(row)
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { success: false, error: '財務データの更新に失敗しました' };
   }
 
   revalidatePath(`/stocks/${parsed.data.stock_id}`);

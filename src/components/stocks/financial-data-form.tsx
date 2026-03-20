@@ -38,8 +38,9 @@ import {
   CONSOLIDATION_TYPE_LABELS,
   INPUT_UNIT_OPTIONS,
 } from '@/lib/schemas/financial-data';
-import { INPUT_UNIT_LABELS } from '@/lib/utils/unit-conversion';
-import { createFinancialData } from '@/actions/financial-data';
+import { fromYen, INPUT_UNIT_LABELS, type InputUnit } from '@/lib/utils/unit-conversion';
+import { createFinancialData, updateFinancialData } from '@/actions/financial-data';
+import type { FullFinancialDataRow } from '@/components/stocks/financial-data-section';
 
 type FormValues = z.input<typeof createFinancialDataSchema>;
 
@@ -66,38 +67,32 @@ const NO_CONVERSION_FIELDS = new Set([
   'current_stock_price',
 ]);
 
+// All amount field names for reverse conversion
+const ALL_CONVERT_FIELDS = new Set([
+  'revenue',
+  'operating_income',
+  'net_income',
+  'total_assets',
+  'equity',
+  'interest_bearing_debt',
+  'operating_cf',
+  'investing_cf',
+  'interest_expense',
+]);
+
 export type ExistingPeriod = {
   fiscal_year: number;
   fiscal_quarter: string;
   consolidation_type: string;
 };
 
-export function FinancialDataForm({
-  stockId,
-  existingPeriods = [],
-  onSuccess,
-}: {
-  stockId: string;
-  existingPeriods?: ExistingPeriod[];
-  onSuccess?: () => void;
-}) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [optionalOpen, setOptionalOpen] = useState(false);
-  const optionalOpenRef = useRef(optionalOpen);
-  useEffect(() => {
-    optionalOpenRef.current = optionalOpen;
-  }, [optionalOpen]);
-
-  const currentYear = new Date().getFullYear();
-
-  // zodResolver bridges z.input (strings) → z.output (numbers) internally,
-  // but RHF's type system cannot reconcile the transform gap, so we assert.
-  const form = useForm<FormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(createFinancialDataSchema) as any,
-    mode: 'onBlur',
-    shouldFocusError: true,
-    defaultValues: {
+function buildDefaultValues(
+  stockId: string,
+  editData: FullFinancialDataRow | null | undefined,
+): FormValues {
+  if (!editData) {
+    const currentYear = new Date().getFullYear();
+    return {
       stock_id: stockId,
       fiscal_year: currentYear,
       fiscal_quarter: 'FY',
@@ -114,7 +109,71 @@ export function FinancialDataForm({
       interest_expense: '',
       current_stock_price: '',
       input_unit: 'million',
-    },
+    };
+  }
+
+  const unit = editData.input_unit as InputUnit;
+
+  // Reverse-convert yen values to the original input unit
+  const reverseConvert = (fieldName: string, value: number | null): string => {
+    if (value == null) return '';
+    if (NO_CONVERSION_FIELDS.has(fieldName)) return String(value);
+    if (ALL_CONVERT_FIELDS.has(fieldName)) return String(fromYen(value, unit));
+    return String(value);
+  };
+
+  return {
+    stock_id: stockId,
+    fiscal_year: editData.fiscal_year,
+    fiscal_quarter: editData.fiscal_quarter as FormValues['fiscal_quarter'],
+    consolidation_type: editData.consolidation_type as FormValues['consolidation_type'],
+    revenue: reverseConvert('revenue', editData.revenue),
+    operating_income: reverseConvert('operating_income', editData.operating_income),
+    net_income: reverseConvert('net_income', editData.net_income),
+    total_assets: reverseConvert('total_assets', editData.total_assets),
+    equity: reverseConvert('equity', editData.equity),
+    interest_bearing_debt: reverseConvert('interest_bearing_debt', editData.interest_bearing_debt),
+    operating_cf: reverseConvert('operating_cf', editData.operating_cf),
+    investing_cf: reverseConvert('investing_cf', editData.investing_cf),
+    shares_outstanding: reverseConvert('shares_outstanding', editData.shares_outstanding),
+    interest_expense: reverseConvert('interest_expense', editData.interest_expense),
+    current_stock_price: reverseConvert('current_stock_price', editData.current_stock_price),
+    input_unit: editData.input_unit as FormValues['input_unit'],
+  };
+}
+
+export function FinancialDataForm({
+  stockId,
+  editData,
+  existingPeriods = [],
+  onSuccess,
+  onCancel,
+}: {
+  stockId: string;
+  editData?: FullFinancialDataRow | null;
+  existingPeriods?: ExistingPeriod[];
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}) {
+  const isEditMode = !!editData;
+  const [isLoading, setIsLoading] = useState(false);
+  const [optionalOpen, setOptionalOpen] = useState(
+    // Auto-expand optional fields in edit mode if any optional field has a value
+    isEditMode && OPTIONAL_FIELDS.some((f) => editData[f.name as keyof FullFinancialDataRow] != null)
+  );
+  const optionalOpenRef = useRef(optionalOpen);
+  useEffect(() => {
+    optionalOpenRef.current = optionalOpen;
+  }, [optionalOpen]);
+
+  // zodResolver bridges z.input (strings) → z.output (numbers) internally,
+  // but RHF's type system cannot reconcile the transform gap, so we assert.
+  const form = useForm<FormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(createFinancialDataSchema) as any,
+    mode: 'onBlur',
+    shouldFocusError: true,
+    defaultValues: buildDefaultValues(stockId, editData),
   });
 
   const selectedUnit = form.watch('input_unit');
@@ -122,15 +181,17 @@ export function FinancialDataForm({
   const watchedQuarter = form.watch('fiscal_quarter');
   const watchedType = form.watch('consolidation_type');
 
+  // In edit mode, skip duplicate detection (the record itself would match)
   const isDuplicate = useMemo(
     () =>
+      !isEditMode &&
       existingPeriods.some(
         (p) =>
           p.fiscal_year === watchedYear &&
           p.fiscal_quarter === watchedQuarter &&
           p.consolidation_type === watchedType
       ),
-    [existingPeriods, watchedYear, watchedQuarter, watchedType]
+    [isEditMode, existingPeriods, watchedYear, watchedQuarter, watchedType]
   );
 
   // Open Collapsible automatically when optional fields have validation errors,
@@ -169,24 +230,26 @@ export function FinancialDataForm({
       // Send raw form values (strings) to the Server Action,
       // which handles its own validation and string→number transform.
       // zodResolver's transformed output (numbers) would fail the server schema.
-      const result = await createFinancialData(
-        form.getValues() as unknown as Parameters<typeof createFinancialData>[0]
-      );
+      const rawValues = form.getValues() as unknown as Parameters<typeof createFinancialData>[0];
+
+      const result = isEditMode
+        ? await updateFinancialData(editData.id, rawValues)
+        : await createFinancialData(rawValues);
 
       if (!result.success) {
         toast.error(result.error);
         return;
       }
 
-      toast.success('財務データを保存しました');
-      form.reset();
+      toast.success(isEditMode ? '財務データを更新しました' : '財務データを保存しました');
+      if (!isEditMode) form.reset();
       onSuccess?.();
     } catch {
-      toast.error('財務データの保存に失敗しました');
+      toast.error(isEditMode ? '財務データの更新に失敗しました' : '財務データの保存に失敗しました');
     } finally {
       setIsLoading(false);
     }
-  }, [form, isLoading, onSuccess]);
+  }, [form, isLoading, isEditMode, editData, onSuccess]);
 
   // Ctrl+S / Cmd+S keyboard shortcut
   useEffect(() => {
@@ -199,6 +262,15 @@ export function FinancialDataForm({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [form, onSubmit, onInvalid]);
+
+  const handleCancel = useCallback(() => {
+    if (form.formState.isDirty) {
+      if (!window.confirm('未保存の変更があります。破棄しますか？')) {
+        return;
+      }
+    }
+    onCancel?.();
+  }, [form.formState.isDirty, onCancel]);
 
   const unitLabel = (fieldName: string) => {
     if (NO_CONVERSION_FIELDS.has(fieldName)) {
@@ -232,6 +304,7 @@ export function FinancialDataForm({
                 <FormControl>
                   <Input
                     type="number"
+                    disabled={isEditMode}
                     {...field}
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   />
@@ -249,7 +322,7 @@ export function FinancialDataForm({
                 <FormLabel>
                   四半期 <span className="text-destructive">*</span>
                 </FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -276,7 +349,7 @@ export function FinancialDataForm({
                 <FormLabel>
                   連結/単体 <span className="text-destructive">*</span>
                 </FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value} disabled={isEditMode}>
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -407,8 +480,16 @@ export function FinancialDataForm({
         {/* Submit */}
         <div className="flex gap-3">
           <Button type="submit" disabled={isLoading}>
-            {isLoading ? '保存中...' : '財務データを保存する'}
+            {isLoading
+              ? (isEditMode ? '更新中...' : '保存中...')
+              : (isEditMode ? '財務データを更新する' : '財務データを保存する')
+            }
           </Button>
+          {isEditMode && (
+            <Button type="button" variant="outline" onClick={handleCancel} disabled={isLoading}>
+              キャンセル
+            </Button>
+          )}
           <p className="text-muted-foreground self-center text-xs">
             Ctrl+S でも保存できます
           </p>

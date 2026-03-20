@@ -1,3 +1,8 @@
+'use client';
+
+import { Pencil } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -10,18 +15,7 @@ import {
   FISCAL_QUARTER_LABELS,
   CONSOLIDATION_TYPE_LABELS,
 } from '@/lib/schemas/financial-data';
-
-type FinancialDataRow = {
-  id: string;
-  fiscal_year: number;
-  fiscal_quarter: string;
-  consolidation_type: string;
-  revenue: number;
-  operating_income: number;
-  net_income: number;
-  total_assets: number;
-  equity: number;
-};
+import type { FullFinancialDataRow } from '@/components/stocks/financial-data-section';
 
 function formatAmount(value: number): string {
   const inMillion = value / 1_000_000;
@@ -30,7 +24,13 @@ function formatAmount(value: number): string {
   }).format(inMillion);
 }
 
-export function FinancialDataList({ data }: { data: FinancialDataRow[] }) {
+export function FinancialDataList({
+  data,
+  onEdit,
+}: {
+  data: FullFinancialDataRow[];
+  onEdit?: (row: FullFinancialDataRow) => void;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -52,6 +52,7 @@ export function FinancialDataList({ data }: { data: FinancialDataRow[] }) {
           <TableHead className="text-right">
             自己資本（百万円）
           </TableHead>
+          {onEdit && <TableHead className="w-16" />}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -80,6 +81,18 @@ export function FinancialDataList({ data }: { data: FinancialDataRow[] }) {
             <TableCell className="text-right tabular-nums">
               {formatAmount(row.equity)}
             </TableCell>
+            {onEdit && (
+              <TableCell>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onEdit(row)}
+                  aria-label={`${row.fiscal_year} ${FISCAL_QUARTER_LABELS[row.fiscal_quarter] ?? row.fiscal_quarter} のデータを編集`}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            )}
           </TableRow>
         ))}
       </TableBody>

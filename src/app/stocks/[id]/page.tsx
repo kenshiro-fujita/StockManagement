@@ -1,16 +1,14 @@
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { Pencil, Plus } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import { connection } from 'next/server';
 
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StockDeleteButton } from '@/components/stocks/stock-delete-button';
 import { StockDetailTabs } from '@/components/stocks/stock-detail-tabs';
-import { FinancialDataForm } from '@/components/stocks/financial-data-form';
-import { FinancialDataList } from '@/components/stocks/financial-data-list';
-import { FinancialDataEmpty } from '@/components/stocks/financial-data-empty';
+import { FinancialDataSection } from '@/components/stocks/financial-data-section';
 import { createClient } from '@/lib/supabase/server';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +25,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     supabase
       .from('financial_data')
       .select(
-        'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity'
+        'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity, interest_bearing_debt, operating_cf, investing_cf, shares_outstanding, interest_expense, current_stock_price, input_unit'
       )
       .eq('stock_id', id)
       .order('fiscal_year', { ascending: false }),
@@ -65,36 +63,11 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     </dl>
   );
 
-  const hasFinancialData = sortedFinancialData && sortedFinancialData.length > 0;
-
-  const existingPeriods = (financialData ?? []).map((d) => ({
-    fiscal_year: d.fiscal_year,
-    fiscal_quarter: d.fiscal_quarter,
-    consolidation_type: d.consolidation_type,
-  }));
-
   const financialContent = (
-    <div className="space-y-8">
-      {hasFinancialData ? (
-        <>
-          <FinancialDataList data={sortedFinancialData} />
-          <details className="group">
-            <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-              <Plus className="h-4 w-4 transition-transform group-open:rotate-45" />
-              新しい期間のデータを追加する
-            </summary>
-            <div className="mt-4">
-              <FinancialDataForm stockId={stock.id} existingPeriods={existingPeriods} />
-            </div>
-          </details>
-        </>
-      ) : (
-        <>
-          <FinancialDataEmpty />
-          <FinancialDataForm stockId={stock.id} existingPeriods={existingPeriods} />
-        </>
-      )}
-    </div>
+    <FinancialDataSection
+      stockId={stock.id}
+      financialData={sortedFinancialData}
+    />
   );
 
   return (
