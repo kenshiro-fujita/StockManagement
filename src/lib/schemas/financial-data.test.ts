@@ -160,6 +160,23 @@ describe('createFinancialDataSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  it('総資産が負の場合にエラーを返す', () => {
+    const result = createFinancialDataSchema.safeParse({
+      ...validData,
+      total_assets: '-500000',
+      equity: '-600000',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const totalAssetsError = result.error.issues.find(
+        (i) => i.path[0] === 'total_assets'
+      );
+      expect(totalAssetsError?.message).toBe(
+        '総資産は0より大きい値を入力してください'
+      );
+    }
+  });
+
   it('総資産が0の場合にエラーを返す', () => {
     const result = createFinancialDataSchema.safeParse({
       ...validData,

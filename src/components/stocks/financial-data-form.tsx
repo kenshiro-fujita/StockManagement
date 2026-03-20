@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type FieldErrors, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -83,6 +83,10 @@ export function FinancialDataForm({
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [optionalOpen, setOptionalOpen] = useState(false);
+  const optionalOpenRef = useRef(optionalOpen);
+  useEffect(() => {
+    optionalOpenRef.current = optionalOpen;
+  }, [optionalOpen]);
 
   const currentYear = new Date().getFullYear();
 
@@ -129,7 +133,8 @@ export function FinancialDataForm({
     [existingPeriods, watchedYear, watchedQuarter, watchedType]
   );
 
-  // Open Collapsible automatically when optional fields have validation errors
+  // Open Collapsible automatically when optional fields have validation errors,
+  // then focus the first error field after the DOM updates.
   const onInvalid = useCallback(
     (errors: FieldErrors<FormValues>) => {
       const optionalFieldNames: Set<string> = new Set(
@@ -138,11 +143,22 @@ export function FinancialDataForm({
       const hasOptionalError = Object.keys(errors).some((key) =>
         optionalFieldNames.has(key)
       );
-      if (hasOptionalError && !optionalOpen) {
+      if (hasOptionalError && !optionalOpenRef.current) {
         setOptionalOpen(true);
+        // Focus the first error field after Collapsible renders
+        requestAnimationFrame(() => {
+          const firstErrorKey = Object.keys(errors)[0];
+          if (firstErrorKey) {
+            const el = document.querySelector<HTMLInputElement>(
+              `[name="${firstErrorKey}"]`
+            );
+            el?.focus();
+            el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
       }
     },
-    [optionalOpen]
+    [] // stable reference — uses optionalOpenRef instead of optionalOpen
   );
 
   const onSubmit = useCallback(async () => {
@@ -195,8 +211,8 @@ export function FinancialDataForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6">
         {isDuplicate && (
-          <Alert>
-            <AlertTriangle className="h-4 w-4" />
+          <Alert className="border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             <AlertDescription>
               この期間のデータは既に登録されています。既存データを編集する場合は一覧から選択してください。
             </AlertDescription>

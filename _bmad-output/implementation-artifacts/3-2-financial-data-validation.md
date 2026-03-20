@@ -1,6 +1,6 @@
 # Story 3.2: 財務データのバリデーション
 
-Status: review
+Status: done
 
 ## Story
 
@@ -255,7 +255,7 @@ Claude Opus 4.6
 - Alert コンポーネント（shadcn/ui）で重複警告バナー表示
 - `onInvalid` コールバックでオプションフィールドエラー時の Collapsible 自動展開
 - `shouldFocusError: true` 明示設定
-- 59 テスト全通過（新規5テスト追加）、ビルド成功、lint クリーン
+- 60 テスト全通過（新規6テスト追加）、ビルド成功、lint クリーン
 
 ### Change Log
 
@@ -263,11 +263,12 @@ Claude Opus 4.6
 |------|--------|--------|
 | 2026-03-17 | Story creation — ultimate context engine | Story 3.2 context engine |
 | 2026-03-19 | Implementation complete — all tasks done | Story 3.2 実装完了 |
+| 2026-03-21 | Code review fixes — M1: focus after Collapsible open, M2: immutable sort, L1: negative total_assets test, L2: stable onInvalid ref, L3: amber alert styling | コードレビュー指摘対応 |
 
 ### File List
 
 - `src/lib/schemas/financial-data.ts` — MODIFIED: `.superRefine()` でビジネスロジックバリデーション追加
-- `src/lib/schemas/financial-data.test.ts` — MODIFIED: 5テスト追加 (12→17)
+- `src/lib/schemas/financial-data.test.ts` — MODIFIED: 6テスト追加 (12→18)
 - `src/components/stocks/financial-data-form.tsx` — MODIFIED: existingPeriods prop、重複検出、onInvalid、shouldFocusError
 - `src/app/stocks/[id]/page.tsx` — MODIFIED: existingPeriods を FinancialDataForm に渡す
 - `src/components/ui/alert.tsx` — NEW: shadcn/ui Alert コンポーネント

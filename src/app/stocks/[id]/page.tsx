@@ -43,7 +43,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     Q2: 3,
     Q1: 4,
   };
-  const sortedFinancialData = financialData?.sort((a, b) => {
+  const sortedFinancialData = [...(financialData ?? [])].sort((a, b) => {
     if (a.fiscal_year !== b.fiscal_year)
       return b.fiscal_year - a.fiscal_year;
     return (QUARTER_ORDER[a.fiscal_quarter] ?? 99) -
