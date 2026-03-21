@@ -40,7 +40,7 @@ import {
 } from '@/lib/schemas/financial-data';
 import { fromYen, INPUT_UNIT_LABELS, type InputUnit } from '@/lib/utils/unit-conversion';
 import { createFinancialData, updateFinancialData } from '@/actions/financial-data';
-import type { FullFinancialDataRow } from '@/components/stocks/financial-data-section';
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 type FormValues = z.input<typeof createFinancialDataSchema>;
 
@@ -114,12 +114,19 @@ function buildDefaultValues(
 
   const unit = editData.input_unit as InputUnit;
 
-  // Reverse-convert yen values to the original input unit
+  // Reverse-convert yen values to the original input unit.
+  // Use toFixed to avoid scientific notation (e.g. 1e-7) for very small results.
+  const toPlainString = (n: number): string => {
+    if (Number.isInteger(n)) return String(n);
+    // toFixed(10) handles up to 10 decimal places, then strip trailing zeros
+    return n.toFixed(10).replace(/\.?0+$/, '');
+  };
+
   const reverseConvert = (fieldName: string, value: number | null): string => {
     if (value == null) return '';
-    if (NO_CONVERSION_FIELDS.has(fieldName)) return String(value);
-    if (ALL_CONVERT_FIELDS.has(fieldName)) return String(fromYen(value, unit));
-    return String(value);
+    if (NO_CONVERSION_FIELDS.has(fieldName)) return toPlainString(value);
+    if (ALL_CONVERT_FIELDS.has(fieldName)) return toPlainString(fromYen(value, unit));
+    return toPlainString(value);
   };
 
   return {
@@ -148,12 +155,14 @@ export function FinancialDataForm({
   existingPeriods = [],
   onSuccess,
   onCancel,
+  onDirtyChange,
 }: {
   stockId: string;
   editData?: FullFinancialDataRow | null;
   existingPeriods?: ExistingPeriod[];
   onSuccess?: () => void;
   onCancel?: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const isEditMode = !!editData;
   const [isLoading, setIsLoading] = useState(false);
@@ -175,6 +184,11 @@ export function FinancialDataForm({
     shouldFocusError: true,
     defaultValues: buildDefaultValues(stockId, editData),
   });
+
+  const { isDirty } = form.formState;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const selectedUnit = form.watch('input_unit');
   const watchedYear = form.watch('fiscal_year');

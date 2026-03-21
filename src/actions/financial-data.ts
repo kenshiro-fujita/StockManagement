@@ -107,14 +107,19 @@ export async function updateFinancialData(
 
   const { supabase, user, parsed, row } = result;
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('financial_data')
     .update(row)
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .select('id');
 
   if (error) {
     return { success: false, error: '財務データの更新に失敗しました' };
+  }
+
+  if (!updated || updated.length === 0) {
+    return { success: false, error: '対象の財務データが見つかりませんでした' };
   }
 
   revalidatePath(`/stocks/${parsed.data.stock_id}`);

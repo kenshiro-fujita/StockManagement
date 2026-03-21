@@ -15,7 +15,7 @@ import {
   FISCAL_QUARTER_LABELS,
   CONSOLIDATION_TYPE_LABELS,
 } from '@/lib/schemas/financial-data';
-import type { FullFinancialDataRow } from '@/components/stocks/financial-data-section';
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 function formatAmount(value: number): string {
   const inMillion = value / 1_000_000;

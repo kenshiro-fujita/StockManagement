@@ -1,30 +1,12 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { FinancialDataList } from '@/components/stocks/financial-data-list';
 import { FinancialDataForm, type ExistingPeriod } from '@/components/stocks/financial-data-form';
 import { FinancialDataEmpty } from '@/components/stocks/financial-data-empty';
-
-export type FullFinancialDataRow = {
-  id: string;
-  fiscal_year: number;
-  fiscal_quarter: string;
-  consolidation_type: string;
-  revenue: number;
-  operating_income: number;
-  net_income: number;
-  total_assets: number;
-  equity: number;
-  interest_bearing_debt: number | null;
-  operating_cf: number | null;
-  investing_cf: number | null;
-  shares_outstanding: number | null;
-  interest_expense: number | null;
-  current_stock_price: number | null;
-  input_unit: string;
-};
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 export function FinancialDataSection({
   stockId,
@@ -34,6 +16,8 @@ export function FinancialDataSection({
   financialData: FullFinancialDataRow[];
 }) {
   const [editingData, setEditingData] = useState<FullFinancialDataRow | null>(null);
+  const formDirtyRef = useRef(false);
+  const editFormRef = useRef<HTMLDivElement>(null);
 
   const existingPeriods: ExistingPeriod[] = financialData.map((d) => ({
     fiscal_year: d.fiscal_year,
@@ -41,8 +25,21 @@ export function FinancialDataSection({
     consolidation_type: d.consolidation_type,
   }));
 
+  const handleDirtyChange = useCallback((dirty: boolean) => {
+    formDirtyRef.current = dirty;
+  }, []);
+
   const handleEdit = useCallback((row: FullFinancialDataRow) => {
+    if (formDirtyRef.current) {
+      if (!window.confirm('未保存の変更があります。破棄して別のデータを編集しますか？')) {
+        return;
+      }
+    }
     setEditingData(row);
+    // Scroll to edit form after React re-renders
+    requestAnimationFrame(() => {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }, []);
 
   const handleSuccess = useCallback(() => {
@@ -62,7 +59,7 @@ export function FinancialDataSection({
           <FinancialDataList data={financialData} onEdit={handleEdit} />
 
           {editingData ? (
-            <div className="rounded-lg border p-6">
+            <div ref={editFormRef} className="rounded-lg border p-6">
               <h3 className="mb-4 text-lg font-semibold">
                 {editingData.fiscal_year}{' '}
                 {editingData.fiscal_quarter === 'FY' ? '通期' : `第${editingData.fiscal_quarter.replace('Q', '')}四半期`}
@@ -75,6 +72,7 @@ export function FinancialDataSection({
                 existingPeriods={existingPeriods}
                 onSuccess={handleSuccess}
                 onCancel={handleCancel}
+                onDirtyChange={handleDirtyChange}
               />
             </div>
           ) : (

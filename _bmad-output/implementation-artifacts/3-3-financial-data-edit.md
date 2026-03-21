@@ -1,6 +1,6 @@
 # Story 3.3: 財務データの修正
 
-Status: review
+Status: done
 
 ## Story
 
