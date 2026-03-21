@@ -57,7 +57,7 @@ development_status:
   3-1-financial-data-input-form: done
   3-2-financial-data-validation: done
   3-3-financial-data-edit: done
-  3-4-financial-data-trends: backlog
+  3-4-financial-data-trends: done
   epic-3-retrospective: optional
 
   epic-4: backlog

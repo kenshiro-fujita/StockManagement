@@ -51,12 +51,19 @@ export function FinancialDataSection({
   }, []);
 
   const hasFinancialData = financialData.length > 0;
+  const isSinglePeriod = financialData.length === 1;
 
   return (
     <div className="space-y-8">
       {hasFinancialData ? (
         <>
           <FinancialDataList data={financialData} onEdit={handleEdit} />
+
+          {isSinglePeriod && (
+            <p className="text-muted-foreground text-sm">
+              複数期のデータを入力すると推移を比較できます
+            </p>
+          )}
 
           {editingData ? (
             <div ref={editFormRef} className="rounded-lg border p-6">
