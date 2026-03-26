@@ -69,6 +69,15 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        highlight: {
+          '0%': { backgroundColor: 'var(--highlight-flash)' },
+          '100%': { backgroundColor: 'transparent' },
+        },
+      },
+      animation: {
+        highlight: 'highlight 0.3s ease-out',
+      },
     },
   },
   plugins: [tailwindcssAnimate],
