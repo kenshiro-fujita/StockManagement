@@ -14,8 +14,9 @@ describe('toYen', () => {
     expect(toYen(1234, 'million')).toBe(1_234_000_000);
   });
 
-  it('億円を円に変換する', () => {
-    expect(toYen(10, 'hundred_million')).toBe(1_000_000_000);
+  it('10億円を円に変換する', () => {
+    expect(toYen(1, 'billion')).toBe(1_000_000_000);
+    expect(toYen(5, 'billion')).toBe(5_000_000_000);
   });
 
   it('小数点を四捨五入する', () => {
@@ -45,8 +46,9 @@ describe('fromYen', () => {
     expect(fromYen(1_234_000_000, 'million')).toBe(1234);
   });
 
-  it('円を億円に変換する', () => {
-    expect(fromYen(1_000_000_000, 'hundred_million')).toBe(10);
+  it('円を10億円に変換する', () => {
+    expect(fromYen(1_000_000_000, 'billion')).toBe(1);
+    expect(fromYen(5_000_000_000, 'billion')).toBe(5);
   });
 
   it('割り切れない場合は小数を返す', () => {

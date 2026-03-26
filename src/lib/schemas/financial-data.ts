@@ -24,7 +24,7 @@ export const INPUT_UNIT_OPTIONS = [
   'yen',
   'thousand',
   'million',
-  'hundred_million',
+  'billion',
 ] as const;
 
 const requiredAmount = z

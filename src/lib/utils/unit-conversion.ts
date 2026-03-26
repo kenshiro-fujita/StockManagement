@@ -1,17 +1,17 @@
-export type InputUnit = 'yen' | 'thousand' | 'million' | 'hundred_million';
+export type InputUnit = 'yen' | 'thousand' | 'million' | 'billion';
 
 const UNIT_MULTIPLIERS: Record<InputUnit, number> = {
   yen: 1,
   thousand: 1_000,
   million: 1_000_000,
-  hundred_million: 100_000_000,
+  billion: 1_000_000_000,
 };
 
 export const INPUT_UNIT_LABELS: Record<InputUnit, string> = {
   yen: '円',
   thousand: '千円',
   million: '百万円',
-  hundred_million: '億円',
+  billion: '10億円',
 };
 
 export function toYen(value: number, unit: InputUnit): number {
