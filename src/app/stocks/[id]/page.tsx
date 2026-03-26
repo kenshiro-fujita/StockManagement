@@ -7,8 +7,8 @@ import { connection } from 'next/server';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StockDeleteButton } from '@/components/stocks/stock-delete-button';
-import { StockDetailTabs } from '@/components/stocks/stock-detail-tabs';
-import { FinancialDataSection } from '@/components/stocks/financial-data-section';
+import { StockDetailClient } from '@/components/stocks/stock-detail-client';
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import { createClient } from '@/lib/supabase/server';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -16,7 +16,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   await connection();
   const supabase = await createClient();
 
-  const [{ data: stock }, { data: financialData }] = await Promise.all([
+  const [{ data: stock }, { data: financialData }, { data: parametersData }] = await Promise.all([
     supabase
       .from('stocks')
       .select('id, stock_code, company_name, market, sector, business_segment')
@@ -29,6 +29,11 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       )
       .eq('stock_id', id)
       .order('fiscal_year', { ascending: false }),
+    supabase
+      .from('parameters')
+      .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+      .eq('stock_id', id)
+      .maybeSingle(),
   ]);
 
   if (!stock) notFound();
@@ -48,6 +53,18 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       (QUARTER_ORDER[b.fiscal_quarter] ?? 99);
   });
 
+  // Convert NUMERIC (string from Supabase) to number, or null if not yet created
+  const initialParameters = parametersData
+    ? {
+        id: parametersData.id as string,
+        stock_id: parametersData.stock_id as string,
+        discount_rate: Number(parametersData.discount_rate),
+        growth_rate: Number(parametersData.growth_rate),
+        tax_rate: Number(parametersData.tax_rate),
+        cap_multiplier: Number(parametersData.cap_multiplier),
+      }
+    : null;
+
   const overviewContent = (
     <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
       <dt className="font-medium text-muted-foreground">銘柄コード</dt>
@@ -61,13 +78,6 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       <dt className="font-medium text-muted-foreground">事業セグメント</dt>
       <dd>{stock.business_segment ?? '—'}</dd>
     </dl>
-  );
-
-  const financialContent = (
-    <FinancialDataSection
-      stockId={stock.id}
-      financialData={sortedFinancialData}
-    />
   );
 
   return (
@@ -90,9 +100,11 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
 
-      <StockDetailTabs
+      <StockDetailClient
+        stockId={stock.id}
+        financialData={sortedFinancialData as FullFinancialDataRow[]}
+        initialParameters={initialParameters}
         overviewContent={overviewContent}
-        financialContent={financialContent}
       />
     </div>
   );
