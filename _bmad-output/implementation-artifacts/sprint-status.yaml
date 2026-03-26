@@ -53,19 +53,19 @@ development_status:
   2-3-stock-edit-delete: done
   epic-2-retrospective: optional
 
-  epic-3: in-progress
+  epic-3: done
   3-1-financial-data-input-form: done
   3-2-financial-data-validation: done
   3-3-financial-data-edit: done
   3-4-financial-data-trends: done
   epic-3-retrospective: optional
 
-  epic-4: backlog
-  4-1-parameter-settings: backlog
-  4-2-calc-engine-golden-tests: backlog
-  4-3-theory-price-detail-view: backlog
-  4-4-realtime-recalculation: backlog
-  4-5-stock-list-theory-price: backlog
+  epic-4: in-progress
+  4-1-parameter-settings: done
+  4-2-calc-engine-golden-tests: done
+  4-3-theory-price-detail-view: done
+  4-4-realtime-recalculation: done
+  4-5-stock-list-theory-price: in-progress
   4-6-calc-logic-transparency: backlog
   epic-4-retrospective: optional
 
