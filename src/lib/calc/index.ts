@@ -1,0 +1,176 @@
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
+import type { ParametersRow } from '@/lib/types/parameters';
+import type { IndicatorResults, CalcResult } from '@/lib/types/calc';
+import { CALC_VERSION } from '@/lib/types/calc';
+import {
+  calcEquityRatio,
+  calcNetProfitMargin,
+  calcOperatingMargin,
+  calcROE,
+  calcROA,
+  calcROIC,
+} from './ratios';
+import { calcEPS, calcPER, calcPBR, calcFCF } from './stock-metrics';
+import { calcYoYGrowthRate, calcMovingAverageROIC } from './growth';
+import {
+  calcBusinessValue,
+  calcAssetValue,
+  calcTheoryPrice,
+  calcGrowthTheoryPrice,
+  calcTheoryMarketCap,
+  calcTheoryPER,
+  calcFutureTheoryMarketCap,
+  calcFutureNetIncome,
+} from './theory-price';
+import { calcSafetyMargin, calcSafetyRate, calcIdealBuyPrice } from './safety';
+
+/** null の CalcResult を生成するヘルパー */
+function nullResult(formula: string): CalcResult<number> {
+  return {
+    value: null,
+    metadata: { formula, inputs: [], rounding: 'なし', calcVersion: CALC_VERSION },
+  };
+}
+
+/**
+ * 全指標を一括計算するエントリーポイント
+ * @param financialData 財務データ（降順ソート済み、[0]が最新期）
+ * @param parameters パラメータ
+ */
+export function calculateAllIndicators(
+  financialData: FullFinancialDataRow[],
+  parameters: ParametersRow,
+): IndicatorResults {
+  if (financialData.length === 0) {
+    throw new Error('財務データが1件以上必要です');
+  }
+
+  // M3: 財務データを fiscal_year 降順にソート（最新期が先頭）
+  const sorted = [...financialData].sort((a, b) => b.fiscal_year - a.fiscal_year);
+
+  const latest = sorted[0];
+  const previous = sorted.length > 1 ? sorted[1] : null;
+  const debt = latest.interest_bearing_debt ?? 0;
+
+  // 収益性
+  const equityRatio = calcEquityRatio(latest.equity, latest.total_assets);
+  const netProfitMargin = calcNetProfitMargin(latest.net_income, latest.revenue);
+  const operatingMargin = calcOperatingMargin(latest.operating_income, latest.revenue);
+
+  // 成長性（前年比）
+  const revenueGrowthRate = previous
+    ? calcYoYGrowthRate(latest.revenue, previous.revenue, '売上高', 'revenue')
+    : nullResult('前年比売上成長率（前期データなし）');
+  const netIncomeGrowthRate = previous
+    ? calcYoYGrowthRate(latest.net_income, previous.net_income, '純利益', 'net_income')
+    : nullResult('前年比純利益成長率（前期データなし）');
+
+  // キャッシュフロー
+  const operatingCF: CalcResult<number> = {
+    value: latest.operating_cf,
+    metadata: {
+      formula: '営業CF（入力値）',
+      inputs: [{ label: '営業CF', value: latest.operating_cf ?? 0, field: 'operating_cf' }],
+      rounding: 'なし（入力値そのまま）',
+      calcVersion: CALC_VERSION,
+    },
+  };
+  const investingCF: CalcResult<number> = {
+    value: latest.investing_cf,
+    metadata: {
+      formula: '投資CF（入力値）',
+      inputs: [{ label: '投資CF', value: latest.investing_cf ?? 0, field: 'investing_cf' }],
+      rounding: 'なし（入力値そのまま）',
+      calcVersion: CALC_VERSION,
+    },
+  };
+  const fcf = calcFCF(latest.operating_cf, latest.investing_cf);
+
+  // 資本効率
+  const roe = calcROE(latest.net_income, latest.equity);
+  const roa = calcROA(latest.net_income, latest.total_assets);
+  const roic = calcROIC(latest.operating_income, parameters.tax_rate, latest.equity, debt);
+
+  // 移動平均ROIC（全期間データを使用）
+  const roicValues = sorted.map((fd) => {
+    const d = fd.interest_bearing_debt ?? 0;
+    return calcROIC(fd.operating_income, parameters.tax_rate, fd.equity, d).value;
+  });
+  const movingAverageROIC = calcMovingAverageROIC(roicValues);
+
+  // 株式指標
+  const epsResult = calcEPS(latest.net_income, latest.shares_outstanding);
+  const per = calcPER(latest.current_stock_price, epsResult.value);
+  const pbr = calcPBR(latest.current_stock_price, latest.shares_outstanding, latest.equity);
+  const eps = epsResult;
+
+  // 理論価値
+  const businessValue = calcBusinessValue(
+    latest.operating_income,
+    parameters.tax_rate,
+    parameters.discount_rate,
+    parameters.growth_rate,
+    parameters.cap_multiplier,
+  );
+  const assetValue = calcAssetValue(latest.equity);
+  const theoryPrice = businessValue.value != null && assetValue.value != null
+    ? calcTheoryPrice(businessValue.value, assetValue.value, debt, latest.shares_outstanding)
+    : nullResult('現状理論株価（事業価値または資産価値算出不可）');
+  const growthTheoryPrice = calcGrowthTheoryPrice(
+    latest.operating_income,
+    parameters.tax_rate,
+    parameters.discount_rate,
+    parameters.growth_rate,
+    latest.equity,
+    debt,
+    latest.shares_outstanding,
+  );
+
+  // 理論PER系
+  const theoryMarketCap = calcTheoryMarketCap(theoryPrice.value, latest.shares_outstanding);
+  const theoryPER = calcTheoryPER(theoryMarketCap.value, latest.net_income);
+  const futureTheoryMarketCap = calcFutureTheoryMarketCap(theoryMarketCap.value, parameters.growth_rate, 5);
+  const futureNetIncome = calcFutureNetIncome(latest.net_income, parameters.growth_rate, 5);
+
+  // 安全性
+  const safetyMarginCurrent = calcSafetyMargin(theoryPrice.value, latest.current_stock_price, '現状');
+  const safetyMarginGrowth = calcSafetyMargin(growthTheoryPrice.value, latest.current_stock_price, '成長込');
+  const safetyRateCurrent = calcSafetyRate(theoryPrice.value, latest.current_stock_price, '現状');
+  const safetyRateGrowth = calcSafetyRate(growthTheoryPrice.value, latest.current_stock_price, '成長込');
+  const idealBuyPriceCurrent = calcIdealBuyPrice(theoryPrice.value, '現状');
+  const idealBuyPriceGrowth = calcIdealBuyPrice(growthTheoryPrice.value, '成長込');
+
+  return {
+    period: {
+      equityRatio,
+      netProfitMargin,
+      operatingMargin,
+      revenueGrowthRate,
+      netIncomeGrowthRate,
+      operatingCF,
+      investingCF,
+      fcf,
+      roe,
+      roa,
+      roic,
+      eps,
+      per,
+      pbr,
+      businessValue,
+      assetValue,
+      theoryPrice,
+      growthTheoryPrice,
+      theoryPER,
+      theoryMarketCap,
+      futureTheoryMarketCap,
+      futureNetIncome,
+      safetyMarginCurrent,
+      safetyMarginGrowth,
+      safetyRateCurrent,
+      safetyRateGrowth,
+      idealBuyPriceCurrent,
+      idealBuyPriceGrowth,
+    },
+    movingAverageROIC,
+  };
+}
