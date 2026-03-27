@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import type { IndicatorResults, CalcResult } from '@/lib/types/calc';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Calculator, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
+import type { IndicatorResults, CalcResult, CalcMetadata, CalcInput } from '@/lib/types/calc';
 import {
   formatCurrency,
   formatStockPrice,
@@ -147,12 +147,16 @@ function ComparisonSummary({
   growthTheoryPrice,
   safetyRateCurrent,
   changedFields,
+  expandedField,
+  onToggle,
 }: {
   currentStockPrice: number | null;
   theoryPrice: CalcResult<number>;
   growthTheoryPrice: CalcResult<number>;
   safetyRateCurrent: CalcResult<number>;
   changedFields: Set<string>;
+  expandedField: string | null;
+  onToggle: (field: string) => void;
 }) {
   const level = getValuationLevel(safetyRateCurrent.value);
   const hasPrice = currentStockPrice != null;
@@ -171,21 +175,30 @@ function ComparisonSummary({
         <SummaryCard
           label="現状理論株価"
           value={formatStockPrice(theoryPrice.value)}
-          dataIndicator="theoryPrice"
+          field="theoryPrice"
+          metadata={theoryPrice.metadata}
           highlighted={changedFields.has('theoryPrice')}
+          expandedField={expandedField}
+          onToggle={onToggle}
         />
         <SummaryCard
           label="成長込理論株価"
           value={formatStockPrice(growthTheoryPrice.value)}
-          dataIndicator="growthTheoryPrice"
+          field="growthTheoryPrice"
+          metadata={growthTheoryPrice.metadata}
           highlighted={changedFields.has('growthTheoryPrice')}
+          expandedField={expandedField}
+          onToggle={onToggle}
         />
         <SummaryCard
           label="安全率（現状）"
           value={formatPercent(safetyRateCurrent.value)}
-          dataIndicator="safetyRateCurrent"
+          field="safetyRateCurrent"
+          metadata={safetyRateCurrent.metadata}
           badge={level ? <ValuationBadge level={level} /> : undefined}
           highlighted={changedFields.has('safetyRateCurrent')}
+          expandedField={expandedField}
+          onToggle={onToggle}
         />
       </div>
       {!hasPrice && (
@@ -202,27 +215,156 @@ function SummaryCard({
   value,
   muted,
   badge,
-  dataIndicator,
+  field,
+  metadata,
   highlighted,
+  expandedField,
+  onToggle,
 }: {
   label: string;
   value: string;
   muted?: boolean;
   badge?: React.ReactNode;
-  dataIndicator?: string;
+  field?: string;
+  metadata?: CalcMetadata;
   highlighted?: boolean;
+  expandedField?: string | null;
+  onToggle?: (field: string) => void;
 }) {
+  const isExpanded = field != null && expandedField === field;
+  const isClickable = field != null && metadata != null && onToggle != null;
+
   return (
     <div
       className={`rounded-lg border p-4 transition-colors ${muted ? 'opacity-60' : ''} ${highlighted ? 'animate-highlight' : ''}`}
-      {...(dataIndicator ? { 'data-indicator': dataIndicator } : {})}
+      {...(field ? { 'data-indicator': field } : {})}
     >
       <p className="text-muted-foreground text-sm">{label}</p>
-      <p className="mt-1 text-xl font-bold tabular-nums" aria-label={`${label} ${value}`}>
-        {value}
-      </p>
+      {isClickable ? (
+        <button
+          type="button"
+          className="mt-1 text-xl font-bold tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 inline-flex items-center gap-1"
+          onClick={() => onToggle(field)}
+          aria-expanded={isExpanded}
+          aria-label={`${label} ${value} — クリックして計算ロジックを${isExpanded ? '閉じる' : '開く'}`}
+        >
+          {value}
+          {isExpanded
+            ? <ChevronUp className="h-4 w-4" aria-hidden="true" />
+            : <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          }
+        </button>
+      ) : (
+        <p className="mt-1 text-xl font-bold tabular-nums" aria-label={`${label} ${value}`}>
+          {value}
+        </p>
+      )}
       {badge && <div className="mt-2">{badge}</div>}
+      {isExpanded && metadata && <CalcLogicPanel metadata={metadata} />}
     </div>
+  );
+}
+
+// ---------- CalcLogicPanel ----------
+
+function InputRefItem({ input }: { input: CalcInput }) {
+  const periodLabel = input.period ? `（${input.period}）` : '';
+  const sourceLabel = input.source ? ` — ${input.source}` : '';
+  return (
+    <li className="flex justify-between gap-2 text-sm">
+      <span className="text-muted-foreground">
+        {input.label}{periodLabel}{sourceLabel}
+      </span>
+      <span className="font-medium tabular-nums whitespace-nowrap">
+        {input.value.toLocaleString()}
+      </span>
+    </li>
+  );
+}
+
+function CalcLogicPanel({ metadata }: { metadata: CalcMetadata }) {
+  return (
+    <div
+      className="mt-2 rounded-md border border-teal-200 bg-teal-50/50 p-4 text-sm"
+      role="region"
+      aria-label="計算ロジック詳細"
+    >
+      <dl className="space-y-3">
+        <div>
+          <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">数式</dt>
+          <dd className="mt-0.5 font-mono text-sm">{metadata.formula}</dd>
+        </div>
+
+        {metadata.inputs.length > 0 && (
+          <div>
+            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">入力値</dt>
+            <dd className="mt-1">
+              <ul className="space-y-1">
+                {metadata.inputs.map((input, i) => (
+                  <InputRefItem key={`${input.field}-${i}`} input={input} />
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+
+        <div className="flex gap-6">
+          <div>
+            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">端数処理</dt>
+            <dd className="mt-0.5">{metadata.rounding}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">calc_version</dt>
+            <dd className="mt-0.5 font-mono">{metadata.calcVersion}</dd>
+          </div>
+        </div>
+      </dl>
+    </div>
+  );
+}
+
+/** Clickable indicator value that toggles CalcLogicPanel */
+function ClickableValue({
+  formatted,
+  label,
+  metadata,
+  expandedField,
+  field,
+  onToggle,
+}: {
+  formatted: string;
+  label: string;
+  metadata: CalcMetadata | undefined;
+  expandedField: string | null;
+  field: string;
+  onToggle: (field: string) => void;
+}) {
+  if (!metadata) {
+    return (
+      <span className="font-medium tabular-nums" aria-label={`${label} ${formatted}`}>
+        {formatted}
+      </span>
+    );
+  }
+
+  const isExpanded = expandedField === field;
+
+  return (
+    <span>
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 font-medium tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500"
+        onClick={() => onToggle(field)}
+        aria-expanded={isExpanded}
+        aria-label={`${label} ${formatted} — クリックして計算ロジックを${isExpanded ? '閉じる' : '開く'}`}
+      >
+        {formatted}
+        {isExpanded
+          ? <ChevronUp className="h-3 w-3" aria-hidden="true" />
+          : <ChevronDown className="h-3 w-3" aria-hidden="true" />
+        }
+      </button>
+    </span>
   );
 }
 
@@ -326,10 +468,14 @@ function IndicatorSection({
   category,
   results,
   changedFields,
+  expandedField,
+  onToggle,
 }: {
   category: CategoryDef;
   results: IndicatorResults;
   changedFields: Set<string>;
+  expandedField: string | null;
+  onToggle: (field: string) => void;
 }) {
   return (
     <section aria-labelledby={`${category.id}-heading`}>
@@ -342,20 +488,30 @@ function IndicatorSection({
           const value = calcResult?.value ?? null;
           const formatted = indicator.format(value);
           const isChanged = changedFields.has(indicator.field);
+          const isExpanded = expandedField === indicator.field;
 
           return (
             <div
               key={indicator.field}
-              className={`flex items-center justify-between px-4 py-3 transition-colors ${isChanged ? 'animate-highlight' : ''}`}
+              className={`px-4 py-3 transition-colors ${isChanged ? 'animate-highlight' : ''}`}
               data-indicator={indicator.field}
             >
-              <dt className="text-muted-foreground text-sm">{indicator.label}</dt>
-              <dd
-                className="font-medium tabular-nums"
-                aria-label={`${indicator.label} ${formatted}`}
-              >
-                {formatted}
-              </dd>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground text-sm">{indicator.label}</dt>
+                <dd>
+                  <ClickableValue
+                    formatted={formatted}
+                    label={indicator.label}
+                    metadata={calcResult?.metadata}
+                    expandedField={expandedField}
+                    field={indicator.field}
+                    onToggle={onToggle}
+                  />
+                </dd>
+              </div>
+              {isExpanded && calcResult?.metadata && (
+                <CalcLogicPanel metadata={calcResult.metadata} />
+              )}
             </div>
           );
         })}
@@ -383,18 +539,39 @@ export function TheoryPriceSection({
   // useHighlight manages animation lifecycle: applies class → clears after duration → allows replay
   const highlighted = useHighlight(changedFields);
 
+  // CalcLogicPanel toggle state — only one panel open at a time
+  const [expandedField, setExpandedField] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleToggle = useCallback((field: string) => {
+    setExpandedField((prev) => (prev === field ? null : field));
+  }, []);
+
+  // Close panel when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (expandedField && containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setExpandedField(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [expandedField]);
+
   if (!results) {
     return <TheoryPriceEmpty />;
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" ref={containerRef}>
       <ComparisonSummary
         currentStockPrice={currentStockPrice}
         theoryPrice={results.period.theoryPrice}
         growthTheoryPrice={results.period.growthTheoryPrice}
         safetyRateCurrent={results.period.safetyRateCurrent}
         changedFields={highlighted}
+        expandedField={expandedField}
+        onToggle={handleToggle}
       />
 
       <div className="space-y-6">
@@ -404,6 +581,8 @@ export function TheoryPriceSection({
             category={category}
             results={results}
             changedFields={highlighted}
+            expandedField={expandedField}
+            onToggle={handleToggle}
           />
         ))}
       </div>

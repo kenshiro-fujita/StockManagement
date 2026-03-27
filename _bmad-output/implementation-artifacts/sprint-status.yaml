@@ -60,13 +60,13 @@ development_status:
   3-4-financial-data-trends: done
   epic-3-retrospective: optional
 
-  epic-4: in-progress
+  epic-4: done
   4-1-parameter-settings: done
   4-2-calc-engine-golden-tests: done
   4-3-theory-price-detail-view: done
   4-4-realtime-recalculation: done
-  4-5-stock-list-theory-price: in-progress
-  4-6-calc-logic-transparency: backlog
+  4-5-stock-list-theory-price: done
+  4-6-calc-logic-transparency: done
   epic-4-retrospective: optional
 
   epic-5: backlog
