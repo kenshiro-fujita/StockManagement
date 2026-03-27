@@ -21,11 +21,13 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import { formatStockPrice } from '@/lib/format';
 
-type SidebarStock = {
+export type SidebarStock = {
   id: string;
   stock_code: string;
   company_name: string;
+  theoryPrice: number | null;
 };
 
 export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
@@ -84,8 +86,8 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
                         <span className="truncate">
                           {stock.stock_code} {stock.company_name}
                         </span>
-                        <span className="ml-auto text-xs text-muted-foreground">
-                          —
+                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                          {formatStockPrice(stock.theoryPrice)}
                         </span>
                       </Link>
                     </SidebarMenuButton>
