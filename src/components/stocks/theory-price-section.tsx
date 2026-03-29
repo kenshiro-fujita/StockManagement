@@ -66,14 +66,7 @@ export function detectChangedFields(
 
 // ---------- Badge ----------
 
-type ValuationLevel = 'cheap' | 'fair' | 'expensive';
-
-export function getValuationLevel(safetyRateValue: number | null): ValuationLevel | null {
-  if (safetyRateValue == null) return null;
-  if (safetyRateValue > 0) return 'cheap';
-  if (safetyRateValue >= -10) return 'fair';
-  return 'expensive';
-}
+import { getValuationLevel, type ValuationLevel } from '@/lib/calc/safety';
 
 const BADGE_CONFIG: Record<ValuationLevel, { label: string; className: string; Icon: typeof TrendingUp }> = {
   cheap: {

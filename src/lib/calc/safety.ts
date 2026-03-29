@@ -50,6 +50,16 @@ export function calcSafetyRate(
   };
 }
 
+/** 安全率から割安/適正/割高を判定する */
+export type ValuationLevel = 'cheap' | 'fair' | 'expensive';
+
+export function getValuationLevel(safetyRateValue: number | null): ValuationLevel | null {
+  if (safetyRateValue == null) return null;
+  if (safetyRateValue > 0) return 'cheap';
+  if (safetyRateValue >= -10) return 'fair';
+  return 'expensive';
+}
+
 /** 理想購入株価 = 理論株価 × 割引係数（デフォルト0.5＝半値） */
 export function calcIdealBuyPrice(
   theoryPrice: number | null,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { getValuationLevel, detectChangedFields } from './theory-price-section';
+import { getValuationLevel } from '@/lib/calc/safety';
+import { detectChangedFields } from './theory-price-section';
 import type { IndicatorResults, CalcResult } from '@/lib/types/calc';
 
 describe('getValuationLevel', () => {

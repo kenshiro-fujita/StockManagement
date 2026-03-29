@@ -8,7 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { formatStockPrice, formatPercent, NULL_DISPLAY } from '@/lib/format';
-import { getValuationLevel } from '@/components/stocks/theory-price-section';
+import { getValuationLevel } from '@/lib/calc/safety';
 
 export type StockWithIndicators = {
   id: string;
