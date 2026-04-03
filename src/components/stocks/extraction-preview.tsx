@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { saveExtractedData, checkExistingFinancialData } from '@/actions/edinet';
+import { saveExtractedData, checkExistingFinancialData, checkMappingChanges } from '@/actions/edinet';
 import type { ExtractionSummary, ExtractionResult } from '@/lib/edinet/csv-parser';
 import { NULL_DISPLAY } from '@/lib/format';
 
@@ -73,6 +73,9 @@ export function ExtractionPreview({
   const [isSaving, setIsSaving] = useState(false);
   const [dataSaved, setDataSaved] = useState(false);
   const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+  const [mappingChanges, setMappingChanges] = useState<
+    { metricKey: string; previousTag: string | null; currentTag: string | null }[]
+  >([]);
 
   const handleValueChange = (metricKey: string, newValue: string) => {
     setEditableValues((prev) =>
@@ -102,6 +105,14 @@ export function ExtractionPreview({
       toast.error('年度を正しく入力してください');
       return;
     }
+
+    // FR17: マッピング変更チェック
+    const { changes } = await checkMappingChanges(
+      stockId,
+      year,
+      editableValues.map((ev) => ({ metricKey: ev.metricKey, matchedTag: ev.matchedTag })),
+    );
+    setMappingChanges(changes);
 
     // 既存データチェック
     const existing = await checkExistingFinancialData(
@@ -221,6 +232,25 @@ export function ExtractionPreview({
         <div className="flex items-center gap-2 text-sm text-amber-700">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {nullCount}件の項目が未抽出です。手動で入力できます。
+        </div>
+      )}
+
+      {/* FR17: マッピング変更アラート */}
+      {mappingChanges.length > 0 && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 space-y-1">
+          <div className="flex items-center gap-2 text-sm font-medium text-amber-800">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            前期と異なる勘定科目マッピングが検出されました
+          </div>
+          <ul className="text-xs text-amber-700 space-y-0.5 ml-6">
+            {mappingChanges.map((c) => (
+              <li key={c.metricKey}>
+                {editableValues.find((v) => v.metricKey === c.metricKey)?.label}:
+                {' '}<span className="font-mono">{c.previousTag ?? '(なし)'}</span>
+                {' → '}<span className="font-mono">{c.currentTag ?? '(なし)'}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

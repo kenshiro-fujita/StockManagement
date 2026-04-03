@@ -190,6 +190,71 @@ export async function saveExtractedData(
     return { success: false, error: '財務データの保存に失敗しました' };
   }
 
+  // FR15: 抽出ログを記録
+  const logEntries = extraction.results.map((r) => ({
+    user_id: user.id,
+    stock_id: stockId,
+    doc_id: 'edinet-extraction',
+    fiscal_year: fiscalYear,
+    metric_key: r.metricKey,
+    matched_tag: r.matchedTag,
+    context_id: r.contextId,
+    raw_value: r.value != null ? String(r.value) : null,
+    normalized_value: r.value,
+    confidence: r.confidence,
+    accounting_standard: extraction.accountingStandard,
+    source_type: 'csv',
+  }));
+
+  await supabase.from('extraction_logs').insert(logEntries);
+
   revalidatePath('/stocks');
   return { success: true };
+}
+
+/**
+ * FR16/FR17: 前回の抽出ログと比較してマッピング変更を検出する
+ */
+export async function checkMappingChanges(
+  stockId: string,
+  fiscalYear: number,
+  currentResults: { metricKey: string; matchedTag: string | null }[],
+): Promise<{ changes: { metricKey: string; previousTag: string | null; currentTag: string | null }[] }> {
+  const supabase = await createClient();
+
+  // 前年度の抽出ログを取得
+  const { data: previousLogs } = await supabase
+    .from('extraction_logs')
+    .select('metric_key, matched_tag')
+    .eq('stock_id', stockId)
+    .eq('fiscal_year', fiscalYear - 1)
+    .order('created_at', { ascending: false });
+
+  if (!previousLogs || previousLogs.length === 0) {
+    return { changes: [] };
+  }
+
+  // 前回のタグをメトリックキーでグループ化（最新のものを使用）
+  const previousTagMap = new Map<string, string | null>();
+  for (const log of previousLogs) {
+    if (!previousTagMap.has(log.metric_key)) {
+      previousTagMap.set(log.metric_key, log.matched_tag);
+    }
+  }
+
+  // 変更を検出
+  const changes: { metricKey: string; previousTag: string | null; currentTag: string | null }[] = [];
+
+  for (const result of currentResults) {
+    const prevTag = previousTagMap.get(result.metricKey);
+    if (prevTag !== undefined && prevTag !== result.matchedTag) {
+      changes.push({
+        metricKey: result.metricKey,
+        previousTag: prevTag,
+        currentTag: result.matchedTag,
+      });
+    }
+  }
+
+  return { changes };
 }
