@@ -1,3 +1,21 @@
+/**
+ * 計算エンジン — 全指標の一括計算エントリーポイント
+ *
+ * 財務データ（1〜N期分）とパラメータ（割引率r, 成長率g, 実効税率, 上限倍率）を受け取り、
+ * 26種類の指標を一括計算して返す。山口揚平氏の理論株価算出手法がベース。
+ *
+ * 計算の依存関係（上から下に依存）:
+ *   財務データ → 収益性指標（自己資本比率, 利益率）
+ *   財務データ + パラメータ → 資本効率（ROIC）
+ *   ROIC + 全期間データ → 移動平均ROIC
+ *   営業利益 + パラメータ → 事業価値（DCF）
+ *   事業価値 + 資産価値 - 負債 → 理論株価
+ *   理論株価 - 現在株価 → 安全域・安全率
+ *
+ * 全ての計算結果は CalcResult<number> 型で返され、
+ * 値だけでなく「数式・入力参照・端数処理ルール・calc_version」のメタデータも含む。
+ * これにより CalcLogicPanel でユーザーが計算過程を検証できる（FR27, FR28）。
+ */
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { ParametersRow } from '@/lib/types/parameters';
 import type { IndicatorResults, CalcResult } from '@/lib/types/calc';

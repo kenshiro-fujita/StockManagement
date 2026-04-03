@@ -1,3 +1,16 @@
+/**
+ * EDINET 抽出結果の編集可能プレビュー（FR14: ユーザー確認フロー）
+ *
+ * 自動抽出された財務指標を編集可能なテーブルとして表示し、
+ * ユーザーが値を確認・修正してから financial_data に保存できる。
+ *
+ * 主な機能:
+ * - 抽出値の編集（null=未抽出の項目は手動入力可能、amber でハイライト）
+ * - 年度・四半期・連結区分の設定
+ * - 既存データとの重複検出 → 上書き確認ダイアログ
+ * - 前期のマッピング変更アラート（FR17: 前期と異なるタグが使われた場合に警告）
+ * - 信頼度バッジ（high=タグ一致+値あり, medium=合算, low=未検出）
+ */
 'use client';
 
 import { useState } from 'react';
@@ -35,10 +48,14 @@ import { saveExtractedData, checkExistingFinancialData, checkMappingChanges } fr
 import type { ExtractionSummary, ExtractionResult } from '@/lib/edinet/csv-parser';
 import { NULL_DISPLAY } from '@/lib/format';
 
+/**
+ * 編集可能な抽出値（ExtractionResult をフォーム用に変換したもの）
+ * value は数値ではなく文字列で保持する（Input フィールドとの双方向バインド用）
+ */
 type EditableValue = {
   metricKey: string;
   label: string;
-  value: string; // フォーム上は文字列
+  value: string;
   matchedTag: string | null;
   confidence: 'high' | 'medium' | 'low';
 };

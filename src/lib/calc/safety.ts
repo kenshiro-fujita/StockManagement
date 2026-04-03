@@ -1,3 +1,13 @@
+/**
+ * 安全性指標の計算関数群
+ *
+ * 理論株価と現在の市場価格を比較し、投資判断の安全度を算出する。
+ *
+ * - 安全域: 理論株価 - 現在株価（プラスなら割安、マイナスなら割高）
+ * - 安全率: 安全域 ÷ 理論株価 × 100（%表示。+15% なら「理論価値より15%安い」）
+ * - 理想購入株価: 理論株価の半値（discountFactor=0.5）。バリュー投資の基本原則。
+ * - 割安/適正/割高の判定: 安全率 > 0 → 割安、-10〜0 → 適正、< -10 → 割高
+ */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 import { roundPercent } from './utils';
@@ -50,7 +60,15 @@ export function calcSafetyRate(
   };
 }
 
-/** 安全率から割安/適正/割高を判定する */
+/**
+ * 安全率から割安/適正/割高を判定する
+ * - cheap（割安）: 安全率 > 0%（理論株価より市場価格が安い）
+ * - fair（適正）: -10% 〜 0%（概ね理論株価通り）
+ * - expensive（割高）: < -10%（理論株価より市場価格が高い）
+ *
+ * この関数は Server Component（StockTable）からも呼ばれるため、
+ * 'use client' のコンポーネントではなく lib/calc/ に配置している。
+ */
 export type ValuationLevel = 'cheap' | 'fair' | 'expensive';
 
 export function getValuationLevel(safetyRateValue: number | null): ValuationLevel | null {

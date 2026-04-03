@@ -1,3 +1,12 @@
+/**
+ * 財務比率の計算関数群
+ *
+ * 収益性（自己資本比率、純利益率、営業利益率）と
+ * 資本効率（ROE、ROA、ROIC）を算出する。
+ *
+ * 全関数が CalcResult<number> を返し、計算メタデータ（数式・入力値・端数処理）を含む。
+ * 分母がゼロの場合は null を返す（ゼロ除算防止）。
+ */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 import { roundPercent } from './utils';

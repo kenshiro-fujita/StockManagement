@@ -1,9 +1,24 @@
+/**
+ * 理論株価の算出関数群（山口揚平氏の手法ベース）
+ *
+ * 計算の流れ:
+ * 1. 事業価値 = 営業利益 × (1-税率) ÷ (r-g)  ← DCF の永久成長モデル
+ *    ただし r≦g だと発散するため、上限倍率（cap_multiplier）で制限する
+ * 2. 資産価値 = 自己資本（簡易的に株主資本＝清算価値と近似）
+ * 3. 理論株価 = (事業価値 + 資産価値 - 有利子負債) ÷ 発行済株式数
+ * 4. 成長込理論株価 = 上限倍率を適用せず DCF のみで計算した理論株価
+ * 5. 理論PER、将来時価総額、将来純利益 は理論株価から派生
+ */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 
 /**
- * 事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)
- * 上限倍率適用: min(基本式, 営業利益 × cap_multiplier × (1-実効税率))
+ * 事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)（DCF 永久成長モデル）
+ *
+ * r-g が 0 以下だとDCF式が発散するため、null を返す。
+ * また、DCF 値が大きくなりすぎないよう、上限倍率（cap_multiplier）を適用する。
+ * 上限値 = 営業利益 × cap_multiplier × (1-実効税率)
+ * 最終的な事業価値 = min(DCF値, 上限値)
  */
 export function calcBusinessValue(
   operatingIncome: number,

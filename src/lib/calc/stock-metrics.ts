@@ -1,3 +1,10 @@
+/**
+ * 株式指標の計算関数群
+ *
+ * EPS（1株当たり利益）、PER（株価収益率）、PBR（株価純資産倍率）、FCF（フリーキャッシュフロー）
+ * を算出する。これらは「現在の市場価格との比較」に使う指標であり、
+ * current_stock_price が null の場合は PER/PBR が算出不可（null）になる。
+ */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 import { roundPercent as round2 } from './utils';
