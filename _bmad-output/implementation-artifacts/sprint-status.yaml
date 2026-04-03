@@ -78,7 +78,12 @@ development_status:
   7-2-stock-rating-and-priority: done
   epic-7-retrospective: optional
 
-  epic-5: backlog
+  epic-5: in-progress
+  5-1-edinet-api-foundation: done
+  5-2-csv-financial-extraction: backlog
+  5-3-user-confirmation-flow: backlog
+  5-4-xbrl-parse-fallback: backlog
+  5-5-mapping-log-and-alerts: backlog
   epic-5-retrospective: optional
 
   epic-8: backlog

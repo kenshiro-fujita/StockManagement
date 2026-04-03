@@ -9,14 +9,17 @@ import { StockDetailTabs } from '@/components/stocks/stock-detail-tabs';
 import { TheoryPriceSection } from '@/components/stocks/theory-price-section';
 import { FinancialDataSection } from '@/components/stocks/financial-data-section';
 import { ParameterSection } from '@/components/stocks/parameter-section';
+import { EdinetSearch } from '@/components/stocks/edinet-search';
 
 export function StockDetailClient({
   stockId,
+  stockCode,
   financialData,
   initialParameters,
   overviewContent,
 }: {
   stockId: string;
+  stockCode: string;
   financialData: FullFinancialDataRow[];
   initialParameters: ParametersRow | null;
   overviewContent: React.ReactNode;
@@ -65,6 +68,9 @@ export function StockDetailClient({
           initialParameters={initialParameters}
           onParametersChange={handleParametersChange}
         />
+      }
+      edinetContent={
+        <EdinetSearch stockId={stockId} stockCode={stockCode} />
       }
     />
   );

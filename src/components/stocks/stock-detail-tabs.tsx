@@ -13,12 +13,14 @@ export function StockDetailTabs({
   theoryPriceContent,
   financialContent,
   parametersContent,
+  edinetContent,
   defaultTab = 'overview',
 }: {
   overviewContent: ReactNode;
   theoryPriceContent: ReactNode;
   financialContent: ReactNode;
   parametersContent: ReactNode;
+  edinetContent?: ReactNode;
   defaultTab?: string;
 }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -30,6 +32,7 @@ export function StockDetailTabs({
         <TabsTrigger value="theory-price">理論株価</TabsTrigger>
         <TabsTrigger value="financial">財務データ</TabsTrigger>
         <TabsTrigger value="parameters">パラメータ</TabsTrigger>
+        {edinetContent && <TabsTrigger value="edinet">EDINET</TabsTrigger>}
       </TabsList>
       <TabsContent value="overview" className="mt-4">
         {overviewContent}
@@ -43,6 +46,11 @@ export function StockDetailTabs({
       <TabsContent value="parameters" className="mt-4">
         {parametersContent}
       </TabsContent>
+      {edinetContent && (
+        <TabsContent value="edinet" className="mt-4">
+          {edinetContent}
+        </TabsContent>
+      )}
     </Tabs>
   );
 }

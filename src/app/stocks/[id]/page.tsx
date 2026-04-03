@@ -122,6 +122,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
 
       <StockDetailClient
         stockId={stock.id}
+        stockCode={stock.stock_code}
         financialData={sortedFinancialData as FullFinancialDataRow[]}
         initialParameters={initialParameters}
         overviewContent={overviewContent}
