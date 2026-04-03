@@ -2,7 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { updateRosterSchema, type UpdateRosterInput } from '@/lib/schemas/roster';
+import {
+  updateRosterSchema,
+  updateRatingSchema,
+  updateBuyPrioritySchema,
+  type UpdateRosterInput,
+  type UpdateRatingInput,
+  type UpdateBuyPriorityInput,
+} from '@/lib/schemas/roster';
 import type { RosterCategory } from '@/lib/types/roster';
 
 export async function updateRosterCategory(
@@ -62,6 +69,66 @@ export async function updateRosterCategory(
   if (historyError) {
     // 履歴の書き込みに失敗しても分類自体は更新済み
     console.error('roster_history insert failed:', historyError);
+  }
+
+  revalidatePath('/stocks');
+  return { success: true };
+}
+
+export async function updateStockRating(
+  data: UpdateRatingInput,
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = updateRatingSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: '入力内容に誤りがあります' };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  const { error } = await supabase
+    .from('stocks')
+    .update({ rating: parsed.data.rating })
+    .eq('id', parsed.data.stock_id);
+
+  if (error) {
+    return { success: false, error: '評価の更新に失敗しました' };
+  }
+
+  revalidatePath('/stocks');
+  return { success: true };
+}
+
+export async function updateBuyPriority(
+  data: UpdateBuyPriorityInput,
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = updateBuyPrioritySchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: '入力内容に誤りがあります' };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  const { error } = await supabase
+    .from('stocks')
+    .update({ buy_priority: parsed.data.buy_priority })
+    .eq('id', parsed.data.stock_id);
+
+  if (error) {
+    return { success: false, error: '優先順の更新に失敗しました' };
   }
 
   revalidatePath('/stocks');

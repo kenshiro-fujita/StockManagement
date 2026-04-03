@@ -48,7 +48,7 @@ async function ComparisonContent({
     await Promise.all([
       supabase
         .from('stocks')
-        .select('id, stock_code, company_name, roster_category')
+        .select('id, stock_code, company_name, roster_category, rating, buy_priority')
         .in('id', stockIds),
       supabase
         .from('financial_data')
@@ -106,6 +106,8 @@ async function ComparisonContent({
       stock_code: stock.stock_code,
       company_name: stock.company_name,
       rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
+      rating: (stock.rating as number | null) ?? null,
+      buyPriority: (stock.buy_priority as number | null) ?? null,
       results,
     };
   });

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   updateRosterSchema,
+  updateRatingSchema,
+  updateBuyPrioritySchema,
   ROSTER_CATEGORIES,
   ROSTER_CATEGORY_LABELS,
   ROSTER_CATEGORY_SHORT_LABELS,
@@ -61,6 +63,57 @@ describe('updateRosterSchema', () => {
       ...validInput,
       stock_id: 'not-a-uuid',
     });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('updateRatingSchema', () => {
+  const validInput = {
+    stock_id: '550e8400-e29b-41d4-a716-446655440000',
+    rating: 3,
+  };
+
+  it('正常な評価（1-5）を受け付ける', () => {
+    for (let r = 1; r <= 5; r++) {
+      const result = updateRatingSchema.safeParse({ ...validInput, rating: r });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it('0を拒否する', () => {
+    const result = updateRatingSchema.safeParse({ ...validInput, rating: 0 });
+    expect(result.success).toBe(false);
+  });
+
+  it('6を拒否する', () => {
+    const result = updateRatingSchema.safeParse({ ...validInput, rating: 6 });
+    expect(result.success).toBe(false);
+  });
+
+  it('小数を拒否する', () => {
+    const result = updateRatingSchema.safeParse({ ...validInput, rating: 3.5 });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('updateBuyPrioritySchema', () => {
+  const validInput = {
+    stock_id: '550e8400-e29b-41d4-a716-446655440000',
+    buy_priority: 1,
+  };
+
+  it('正の整数を受け付ける', () => {
+    const result = updateBuyPrioritySchema.safeParse(validInput);
+    expect(result.success).toBe(true);
+  });
+
+  it('nullを受け付ける（未設定）', () => {
+    const result = updateBuyPrioritySchema.safeParse({ ...validInput, buy_priority: null });
+    expect(result.success).toBe(true);
+  });
+
+  it('0を拒否する', () => {
+    const result = updateBuyPrioritySchema.safeParse({ ...validInput, buy_priority: 0 });
     expect(result.success).toBe(false);
   });
 });

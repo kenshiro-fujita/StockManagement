@@ -9,6 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { StockDeleteButton } from '@/components/stocks/stock-delete-button';
 import { StockDetailClient } from '@/components/stocks/stock-detail-client';
 import { RosterSection } from '@/components/stocks/roster-section';
+import { StarRating } from '@/components/stocks/star-rating';
+import { BuyPriorityInput } from '@/components/stocks/buy-priority-input';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { RosterCategory } from '@/lib/types/roster';
 import { createClient } from '@/lib/supabase/server';
@@ -21,7 +23,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ data: stock }, { data: financialData }, { data: parametersData }] = await Promise.all([
     supabase
       .from('stocks')
-      .select('id, stock_code, company_name, market, sector, business_segment, roster_category')
+      .select('id, stock_code, company_name, market, sector, business_segment, roster_category, rating, buy_priority')
       .eq('id', id)
       .single(),
     supabase
@@ -85,6 +87,16 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
         stockId={stock.id}
         currentCategory={(stock.roster_category as RosterCategory | null) ?? null}
       />
+      <div className="flex flex-wrap items-center gap-6">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-muted-foreground">評価</span>
+          <StarRating stockId={stock.id} currentRating={(stock.rating as number | null) ?? null} />
+        </div>
+        <BuyPriorityInput
+          stockId={stock.id}
+          currentPriority={(stock.buy_priority as number | null) ?? null}
+        />
+      </div>
     </div>
   );
 

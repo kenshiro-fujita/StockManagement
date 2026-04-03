@@ -31,6 +31,8 @@ export type StockWithIndicators = {
   theoryPrice: number | null;
   safetyRateCurrent: number | null;
   rosterCategory: RosterCategory | null;
+  rating: number | null;
+  buyPriority: number | null;
 };
 
 const SAFETY_RATE_COLORS: Record<string, string> = {
@@ -102,6 +104,8 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
             <TableHead>ロースター</TableHead>
             <TableHead>市場</TableHead>
             <TableHead>業種</TableHead>
+            <TableHead className="text-center">評価</TableHead>
+            <TableHead className="tabular-nums text-center">優先順</TableHead>
             <TableHead className="tabular-nums text-right">理論株価</TableHead>
             <TableHead className="tabular-nums text-right">安全率</TableHead>
           </TableRow>
@@ -146,6 +150,16 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 </TableCell>
                 <TableCell className="text-muted-foreground">
                   {stock.sector ?? NULL_DISPLAY}
+                </TableCell>
+                <TableCell className="text-center">
+                  {stock.rating != null ? (
+                    <span className="text-yellow-500">{'★'.repeat(stock.rating)}</span>
+                  ) : (
+                    <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                  )}
+                </TableCell>
+                <TableCell className="tabular-nums text-center text-muted-foreground">
+                  {stock.buyPriority ?? NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="tabular-nums text-right text-muted-foreground">
                   {formatStockPrice(stock.theoryPrice)}

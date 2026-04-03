@@ -20,7 +20,7 @@ async function StockList() {
     await Promise.all([
       supabase
         .from('stocks')
-        .select('id, stock_code, company_name, market, sector, roster_category')
+        .select('id, stock_code, company_name, market, sector, roster_category, rating, buy_priority')
         .order('created_at', { ascending: false }),
       supabase
         .from('financial_data')
@@ -91,6 +91,8 @@ async function StockList() {
       theoryPrice,
       safetyRateCurrent,
       rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
+      rating: (stock.rating as number | null) ?? null,
+      buyPriority: (stock.buy_priority as number | null) ?? null,
     };
   });
 

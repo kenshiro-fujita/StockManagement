@@ -37,6 +37,8 @@ type ComparisonStock = {
   stock_code: string;
   company_name: string;
   rosterCategory: RosterCategory | null;
+  rating: number | null;
+  buyPriority: number | null;
   results: IndicatorResults | null;
 };
 
@@ -107,6 +109,34 @@ export function ComparisonTable({
                 ) : (
                   <span className="text-muted-foreground">{NULL_DISPLAY}</span>
                 )}
+              </TableCell>
+            ))}
+          </TableRow>
+
+          {/* 評価行 */}
+          <TableRow>
+            <TableCell className="sticky left-0 z-10 bg-background font-medium text-muted-foreground text-sm">
+              評価
+            </TableCell>
+            {stocks.map((stock) => (
+              <TableCell key={stock.id} className="text-center">
+                {stock.rating != null ? (
+                  <span className="text-yellow-500">{'★'.repeat(stock.rating)}<span className="text-muted-foreground text-xs ml-1">{stock.rating}/5</span></span>
+                ) : (
+                  <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                )}
+              </TableCell>
+            ))}
+          </TableRow>
+
+          {/* 優先順行 */}
+          <TableRow>
+            <TableCell className="sticky left-0 z-10 bg-background font-medium text-muted-foreground text-sm">
+              購入優先順
+            </TableCell>
+            {stocks.map((stock) => (
+              <TableCell key={stock.id} className="text-center tabular-nums">
+                {stock.buyPriority ?? <span className="text-muted-foreground">{NULL_DISPLAY}</span>}
               </TableCell>
             ))}
           </TableRow>
