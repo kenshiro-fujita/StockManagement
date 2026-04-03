@@ -1,3 +1,17 @@
+/**
+ * EDINET XBRL / iXBRL パーサー（CSV フォールバック用）
+ *
+ * csvFlag=0 の書類や、CSV 取得に失敗した場合に使用する。
+ * type=1（XBRL ZIP）を展開し、以下の2形式を両方パースする:
+ *
+ * 1. 従来 XBRL (.xbrl) — fast-xml-parser で XML → JSON → 再帰走査
+ * 2. インライン XBRL (.htm) — cheerio で HTML DOM から ix:nonFraction タグを抽出
+ *
+ * 重要な落とし穴:
+ * - iXBRL の scale 属性: 表示値に 10^scale を掛ける必要がある（見落とすと100万倍ズレる）
+ * - iXBRL の sign 属性: "-" なら値を負にする
+ * - contextRef の判別: NonConsolidatedMember を含まない = 連結
+ */
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import * as cheerio from 'cheerio';
@@ -11,7 +25,10 @@ import {
 } from './taxonomy';
 import { normalizeNumber, type ExtractionResult, type ExtractionSummary } from './csv-parser';
 
-/** XBRL Fact（従来XBRLまたはiXBRLから抽出） */
+/**
+ * XBRL から抽出した1つの Fact
+ * CSV の CsvFact と異なり、value は既に数値化済み（iXBRL の scale/sign 適用済み）
+ */
 type XbrlFact = {
   localName: string;
   contextRef: string;
@@ -75,19 +92,27 @@ export async function extractFinancialMetricsFromXbrl(
 
 /**
  * 従来 XBRL (.xbrl) をパースする
+ *
+ * fast-xml-parser で XML を JSON に変換し、再帰的に走査して
+ * 名前空間付き要素（例: jppfs_cor:NetSales）のテキストノードを抽出する。
+ *
+ * fast-xml-parser の出力形式:
+ * - 属性は "@_" プレフィックス付きのプロパティ（例: @_contextRef）
+ * - テキストノードは "#text" キー
+ * - isArray: () => true で全要素を配列化（一貫した走査のため）
  */
 function parseTraditionalXbrl(xmlContent: string): XbrlFact[] {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
-    removeNSPrefix: false,
-    isArray: () => true,
+    removeNSPrefix: false,     // 名前空間プレフィックスを保持（ローカル名抽出は自分で行う）
+    isArray: () => true,       // 全要素を配列として扱う（単一要素でも [elem] の形になる）
   });
 
   const doc = parser.parse(xmlContent);
   const facts: XbrlFact[] = [];
 
-  // 再帰的に全要素を走査
+  // JSON ツリーを再帰的に走査し、contextRef 属性を持つテキストノードを Fact として収集する
   function traverse(obj: unknown, parentKey = '') {
     if (obj == null) return;
     if (Array.isArray(obj)) {
@@ -136,25 +161,35 @@ function parseTraditionalXbrl(xmlContent: string): XbrlFact[] {
 
 /**
  * iXBRL (.htm/.html) をパースする
+ *
+ * HTML の中に埋め込まれた XBRL タグ（ix:nonFraction, ix:nonNumeric）を
+ * cheerio の CSS セレクタで抽出する。
+ *
+ * 注意すべき属性:
+ * - scale: 表示値に 10^scale を乗算（例: scale="6" → 百万円単位 → 円に変換）
+ * - sign: "-" なら値を負にする（マイナス記号がタグの外に書かれる場合がある）
+ * - name: "jppfs_cor:NetSales" 形式 → コロン以降がローカル名
  */
 function parseInlineXbrl(htmlContent: string): XbrlFact[] {
   const $ = cheerio.load(htmlContent, { xmlMode: false });
   const facts: XbrlFact[] = [];
 
-  // ix:nonFraction — 数値データ
+  // ix:nonFraction — 数値データ（売上高、純利益等）
   $('ix\\:nonFraction, ix\\:nonfraction').each((_, el) => {
     const $el = $(el);
     const name = $el.attr('name') ?? '';
     const contextRef = $el.attr('contextref') ?? '';
     const unitRef = $el.attr('unitref') ?? '';
-    const scale = parseInt($el.attr('scale') ?? '0', 10);
-    const sign = $el.attr('sign') ?? '';
-    const rawText = $el.text().trim();
+    const scale = parseInt($el.attr('scale') ?? '0', 10);  // scale=0 ならそのまま
+    const sign = $el.attr('sign') ?? '';                     // sign="-" なら負
+    const rawText = $el.text().trim();                       // タグ内テキスト（表示値）
 
     let num = normalizeNumber(rawText);
+    // scale 属性の適用: 表示値 × 10^scale = 実際の値（円）
     if (num != null && scale !== 0) {
       num = num * Math.pow(10, scale);
     }
+    // sign 属性の適用: マイナス記号がタグ外に記載される場合の対応
     if (num != null && sign === '-') {
       num = -Math.abs(num);
     }

@@ -1,10 +1,24 @@
 /**
- * EDINET 勘定科目マッピング
- * edinet-mcp の taxonomy.yaml + 3LLMリサーチの統合結果
+ * EDINET 勘定科目マッピング定義
+ *
+ * EDINET の XBRL / CSV データから財務指標を抽出する際の、
+ * 「どのタグ名で検索すれば目的の数値が見つかるか」を定義するモジュール。
+ *
+ * 課題:
+ * - 同じ「売上高」でも会計基準（J-GAAP / IFRS / US-GAAP）でタグ名が異なる
+ * - 同じ基準内でも企業によって使うタグにバリエーションがある（例: Revenue vs NetSales）
+ *
+ * 解決策:
+ * - 会計基準ごとに「候補タグの優先順リスト」を定義
+ * - 配列の先頭から検索し、最初にヒットした値を採用する（フォールバック検索）
+ *
+ * 参考: edinet-mcp の taxonomy.yaml + Claude/Gemini/ChatGPT 3LLM リサーチの統合結果
  */
 
+/** 日本の上場企業が採用する3つの会計基準 */
 export type AccountingStandard = 'JGAAP' | 'IFRS' | 'USGAAP';
 
+/** 抽出対象の財務指標キー（financial_data テーブルのカラムに対応） */
 export type MetricKey =
   | 'revenue'
   | 'operating_profit'
@@ -95,17 +109,25 @@ export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, s
   },
 };
 
-/** 有利子負債は合算が必要な特殊メトリック */
+/**
+ * 合算が必要な特殊メトリックのリスト
+ * 有利子負債は XBRL に単一タグが存在しないため、
+ * 短期借入金 + 長期借入金 + 社債 等の個別タグを全て足し合わせる
+ */
 export const AGGREGATE_METRICS: MetricKey[] = ['interest_bearing_debt'];
 
 /**
- * AccountingStandardsDEI の値から会計基準を判定する
+ * XBRL/CSV 内の AccountingStandardsDEI タグの値から会計基準を判定する
+ *
+ * 典型的な値: "Japan GAAP", "IFRS", "US GAAP", "JMIS"（修正国際基準）
+ * JMIS は実質的に IFRS のタグ体系を使うため、IFRS として扱う。
+ * 判定不能な場合は J-GAAP（日本の上場企業で最多）にフォールバックする。
  */
 export function detectAccountingStandard(raw: string | null | undefined): AccountingStandard {
   if (!raw) return 'JGAAP';
   const s = raw.toLowerCase();
   if (s.includes('ifrs')) return 'IFRS';
   if (s.includes('us')) return 'USGAAP';
-  if (s.includes('jmis')) return 'IFRS'; // 修正国際基準はIFRSとして扱う
+  if (s.includes('jmis')) return 'IFRS';
   return 'JGAAP';
 }

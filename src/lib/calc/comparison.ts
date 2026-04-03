@@ -1,11 +1,27 @@
+/**
+ * 銘柄比較ビューのロジック
+ *
+ * 複数銘柄を横並びにしたとき、各指標の「最良値」をハイライトするための判定ロジック。
+ *
+ * direction（どちらが良いか）:
+ * - 'higher': 値が大きいほど良い（ROE, 安全率, EPS 等）
+ * - 'lower': 値が小さいほど良い（PER, PBR）
+ * - 'none': 比較不可（理論株価は銘柄固有のためハイライトしない）
+ */
 import type { IndicatorResults } from '@/lib/types/calc';
 
+/** 指標の「良い方向」を示す。higher=大きいほど良い, lower=小さいほど良い, none=比較しない */
 export type ComparisonDirection = 'higher' | 'lower' | 'none';
 
+/** 比較テーブルに表示する1つの指標の定義 */
 export type ComparisonIndicator = {
+  /** IndicatorResults のフィールド名 */
   field: string;
+  /** 日本語表示名 */
   label: string;
+  /** どちらの値が良いか */
   direction: ComparisonDirection;
+  /** 表示フォーマット */
   format: 'stockPrice' | 'percent' | 'percentUnsigned' | 'currency' | 'multiple' | 'perShare';
 };
 

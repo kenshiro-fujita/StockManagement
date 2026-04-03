@@ -1,16 +1,38 @@
+/**
+ * EDINET API v2 クライアント
+ *
+ * 金融庁の EDINET API を呼び出して、有価証券報告書の検索・取得を行う。
+ * サーバーサイド専用（クロスドメイン通信が禁止されているため）。
+ *
+ * 主な責務:
+ * - 書類一覧の取得（日付指定）
+ * - 書類データ（ZIP）の取得（docID指定）
+ * - 有価証券報告書のフィルタリング
+ * - 証券コードによる有報検索（日付範囲イテレーション）
+ */
 import type { EdinetDocListResponse, EdinetDocument, AnnualReport } from './types';
 
+/** EDINET API v2 のベース URL */
 const EDINET_BASE_URL = 'https://api.edinet-fsa.go.jp/api/v2';
+/** リクエストタイムアウト（NFR18 準拠: 30秒以内） */
 const REQUEST_TIMEOUT_MS = 30_000;
+/** 最大リトライ回数（NFR18 準拠: 最大3回） */
 const MAX_RETRIES = 3;
+/** リトライ間隔のベース値（レート制限対策: 3秒） */
 const RETRY_BASE_DELAY_MS = 3_000;
 
+/** 環境変数から EDINET API キーを取得する */
 function getApiKey(): string {
   const key = process.env.EDINET_API_KEY;
   if (!key) throw new Error('EDINET_API_KEY が設定されていません');
   return key;
 }
 
+/**
+ * タイムアウト付き fetch + 指数バックオフリトライ
+ * - 401（認証エラー）はリトライしない
+ * - 500系（サーバーエラー）とタイムアウトはリトライする
+ */
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
@@ -97,6 +119,12 @@ export async function fetchDocumentData(
 
 /**
  * 書類一覧から有価証券報告書のみを抽出する
+ *
+ * フィルタ条件:
+ * - docTypeCode === '120'（有価証券報告書）
+ * - secCode が存在する（証券コードで銘柄照合するため）
+ * - XBRL または CSV データが利用可能
+ * - 取下・不開示でない通常の書類
  */
 export function filterAnnualReports(documents: EdinetDocument[]): AnnualReport[] {
   return documents
@@ -125,7 +153,13 @@ export function filterAnnualReports(documents: EdinetDocument[]): AnnualReport[]
 
 /**
  * 指定した証券コード（4桁）に一致する有価証券報告書を検索する
- * 日付範囲をイテレートして検索（EDINET APIは日付単位）
+ *
+ * EDINET API は「日付単位」でしか書類一覧を取得できないため、
+ * 指定された日付範囲を1日ずつイテレートして検索する。
+ * 各リクエスト間には RETRY_BASE_DELAY_MS のスリープを挟んでレート制限に対応する。
+ *
+ * 注意: EDINET の secCode は5桁（例: "72030"）、stocks の stock_code は4桁（例: "7203"）。
+ * 先頭4桁で照合する。
  */
 export async function searchAnnualReports(
   stockCode: string,
@@ -144,6 +178,7 @@ export async function searchAnnualReports(
       if (!response.results) continue;
 
       const reports = filterAnnualReports(response.results);
+      // secCode の先頭4桁と証券コード（4桁）を照合
       const matched = reports.filter(
         (r) => r.secCode.slice(0, 4) === stockCode,
       );

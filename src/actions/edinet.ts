@@ -1,3 +1,14 @@
+/**
+ * EDINET 関連の Server Actions
+ *
+ * Next.js Server Actions として動作し、以下の操作を提供する:
+ * - searchEdinetDocuments: 証券コードで有価証券報告書を検索する
+ * - saveEdinetDocument: 検索結果の書類メタデータを DB に保存する
+ * - extractFinancialData: CSV/XBRL から財務指標を抽出する（CSV優先→XBRLフォールバック）
+ * - checkExistingFinancialData: 同じ年度のデータが既に存在するか確認する
+ * - saveExtractedData: 抽出結果を financial_data テーブルに保存 + 抽出ログ記録
+ * - checkMappingChanges: 前期の抽出ログと比較してタグ変更を検出する
+ */
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
@@ -7,6 +18,7 @@ import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/cs
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
 
+/** 証券コードと日付範囲を指定して EDINET から有価証券報告書を検索する */
 export async function searchEdinetDocuments(
   stockId: string,
   stockCode: string,
@@ -40,6 +52,7 @@ export async function searchEdinetDocuments(
   }
 }
 
+/** 検索結果の書類メタデータを edinet_documents テーブルに保存する（upsert） */
 export async function saveEdinetDocument(
   stockId: string,
   report: AnnualReport,
@@ -82,7 +95,13 @@ export async function saveEdinetDocument(
 }
 
 /**
- * EDINET CSV (type=5) から財務データを抽出する
+ * EDINET の書類データから財務指標を抽出する
+ *
+ * 抽出戦略（CSV優先 → XBRLフォールバック）:
+ * 1. csvFlag=true の場合、まず type=5（CSV）で取得を試みる
+ *    → CSV は軽量かつパースが簡単（タイムアウトしにくい）
+ * 2. CSV 取得に失敗した場合、または csvFlag=false の場合、
+ *    type=1（XBRL ZIP）を取得して iXBRL/XBRL をパースする
  */
 export async function extractFinancialData(
   docID: string,
@@ -119,12 +138,7 @@ export async function extractFinancialData(
   }
 }
 
-/**
- * 抽出結果を financial_data テーブルに保存する
- */
-/**
- * 同じ年度・四半期・連結区分のデータが既に存在するか確認する
- */
+/** 同じ年度・四半期・連結区分のデータが既に存在するか確認する（上書き警告用） */
 export async function checkExistingFinancialData(
   stockId: string,
   fiscalYear: number,
@@ -144,6 +158,10 @@ export async function checkExistingFinancialData(
   return { exists: data != null };
 }
 
+/**
+ * 抽出結果（ユーザーが編集済みの値を含む）を financial_data テーブルに保存する
+ * 保存後、extraction_logs テーブルにも抽出ログを記録する（FR15: 判定過程の記録）
+ */
 export async function saveExtractedData(
   stockId: string,
   extraction: ExtractionSummary,
@@ -160,7 +178,8 @@ export async function saveExtractedData(
     return { success: false, error: '認証が必要です' };
   }
 
-  // 抽出結果をフィールドにマッピング
+  // 抽出結果の MetricKey → financial_data カラムへのマッピング
+  // MetricKey（例: 'operating_profit'）と DB カラム（例: 'operating_income'）は名前が異なる場合がある
   const getValue = (key: string) =>
     extraction.results.find((r) => r.metricKey === key)?.value ?? null;
 
