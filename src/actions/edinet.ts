@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
 import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
+import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
 
 export async function searchEdinetDocuments(
@@ -85,6 +86,7 @@ export async function saveEdinetDocument(
  */
 export async function extractFinancialData(
   docID: string,
+  csvFlag: boolean = true,
 ): Promise<{ success: boolean; error?: string; data?: ExtractionSummary }> {
   const supabase = await createClient();
   const {
@@ -96,8 +98,20 @@ export async function extractFinancialData(
   }
 
   try {
-    const zipData = await fetchDocumentData(docID, 5);
-    const summary = await extractFinancialMetrics(zipData);
+    // CSV 優先、フォールバックで XBRL
+    if (csvFlag) {
+      try {
+        const zipData = await fetchDocumentData(docID, 5);
+        const summary = await extractFinancialMetrics(zipData);
+        return { success: true, data: summary };
+      } catch {
+        // CSV取得失敗 → XBRLにフォールバック
+      }
+    }
+
+    // XBRL パース（csvFlag=0 または CSV取得失敗時）
+    const xbrlZip = await fetchDocumentData(docID, 1);
+    const summary = await extractFinancialMetricsFromXbrl(xbrlZip);
     return { success: true, data: summary };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'データ抽出に失敗しました';

@@ -51,11 +51,11 @@ export function EdinetSearch({
     setResults(result.data ?? []);
   };
 
-  const handleExtract = async (docID: string) => {
+  const handleExtract = async (docID: string, csvFlag: boolean) => {
     setIsExtracting(docID);
     setExtraction(null);
 
-    const result = await extractFinancialData(docID);
+    const result = await extractFinancialData(docID, csvFlag);
 
     setIsExtracting(null);
 
@@ -184,11 +184,11 @@ export function EdinetSearch({
                         <Check className="mr-1 h-4 w-4 text-green-600" />
                         保存済み
                       </Button>
-                      {report.csvFlag && (
+                      {(report.csvFlag || report.xbrlFlag) && (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleExtract(report.docID)}
+                          onClick={() => handleExtract(report.docID, report.csvFlag)}
                           disabled={isExtracting === report.docID}
                         >
                           {isExtracting === report.docID ? (
@@ -196,7 +196,7 @@ export function EdinetSearch({
                           ) : (
                             <Download className="mr-1 h-4 w-4" />
                           )}
-                          データ取得
+                          データ取得{!report.csvFlag ? '(XBRL)' : ''}
                         </Button>
                       )}
                     </>
