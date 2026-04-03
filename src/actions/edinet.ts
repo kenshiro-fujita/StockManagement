@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { searchAnnualReports } from '@/lib/edinet/client';
+import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
+import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
 
 export async function searchEdinetDocuments(
@@ -73,6 +74,82 @@ export async function saveEdinetDocument(
 
   if (error) {
     return { success: false, error: '書類情報の保存に失敗しました' };
+  }
+
+  revalidatePath('/stocks');
+  return { success: true };
+}
+
+/**
+ * EDINET CSV (type=5) から財務データを抽出する
+ */
+export async function extractFinancialData(
+  docID: string,
+): Promise<{ success: boolean; error?: string; data?: ExtractionSummary }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  try {
+    const zipData = await fetchDocumentData(docID, 5);
+    const summary = await extractFinancialMetrics(zipData);
+    return { success: true, data: summary };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'データ抽出に失敗しました';
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * 抽出結果を financial_data テーブルに保存する
+ */
+export async function saveExtractedData(
+  stockId: string,
+  extraction: ExtractionSummary,
+  fiscalYear: number,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  // 抽出結果をフィールドにマッピング
+  const getValue = (key: string) =>
+    extraction.results.find((r) => r.metricKey === key)?.value ?? null;
+
+  const { error } = await supabase.from('financial_data').upsert(
+    {
+      user_id: user.id,
+      stock_id: stockId,
+      fiscal_year: fiscalYear,
+      fiscal_quarter: 'FY',
+      consolidation_type: 'consolidated',
+      revenue: getValue('revenue'),
+      operating_income: getValue('operating_profit'),
+      net_income: getValue('net_income_parent'),
+      total_assets: getValue('total_assets'),
+      equity: getValue('equity'),
+      operating_cf: getValue('operating_cf'),
+      investing_cf: getValue('investing_cf'),
+      shares_outstanding: getValue('issued_shares'),
+      interest_bearing_debt: getValue('interest_bearing_debt'),
+      interest_expense: getValue('interest_expense'),
+      input_unit: 'yen',
+    },
+    { onConflict: 'user_id,stock_id,fiscal_year,fiscal_quarter,consolidation_type' },
+  );
+
+  if (error) {
+    return { success: false, error: '財務データの保存に失敗しました' };
   }
 
   revalidatePath('/stocks');

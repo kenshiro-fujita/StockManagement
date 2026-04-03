@@ -80,7 +80,7 @@ development_status:
 
   epic-5: in-progress
   5-1-edinet-api-foundation: done
-  5-2-csv-financial-extraction: backlog
+  5-2-csv-financial-extraction: done
   5-3-user-confirmation-flow: backlog
   5-4-xbrl-parse-fallback: backlog
   5-5-mapping-log-and-alerts: backlog
