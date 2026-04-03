@@ -108,10 +108,34 @@ export async function extractFinancialData(
 /**
  * 抽出結果を financial_data テーブルに保存する
  */
+/**
+ * 同じ年度・四半期・連結区分のデータが既に存在するか確認する
+ */
+export async function checkExistingFinancialData(
+  stockId: string,
+  fiscalYear: number,
+  fiscalQuarter: string,
+  consolidationType: string,
+): Promise<{ exists: boolean }> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('financial_data')
+    .select('id')
+    .eq('stock_id', stockId)
+    .eq('fiscal_year', fiscalYear)
+    .eq('fiscal_quarter', fiscalQuarter)
+    .eq('consolidation_type', consolidationType)
+    .maybeSingle();
+
+  return { exists: data != null };
+}
+
 export async function saveExtractedData(
   stockId: string,
   extraction: ExtractionSummary,
   fiscalYear: number,
+  fiscalQuarter: string = 'FY',
+  consolidationType: string = 'consolidated',
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
   const {
@@ -131,8 +155,8 @@ export async function saveExtractedData(
       user_id: user.id,
       stock_id: stockId,
       fiscal_year: fiscalYear,
-      fiscal_quarter: 'FY',
-      consolidation_type: 'consolidated',
+      fiscal_quarter: fiscalQuarter,
+      consolidation_type: consolidationType,
       revenue: getValue('revenue'),
       operating_income: getValue('operating_profit'),
       net_income: getValue('net_income_parent'),

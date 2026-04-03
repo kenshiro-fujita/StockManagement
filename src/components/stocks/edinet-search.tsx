@@ -1,23 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, FileText, Check, AlertCircle, Loader2, Download, Save } from 'lucide-react';
+import { Search, FileText, Check, AlertCircle, Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { searchEdinetDocuments, saveEdinetDocument, extractFinancialData, saveExtractedData } from '@/actions/edinet';
+import { searchEdinetDocuments, saveEdinetDocument, extractFinancialData } from '@/actions/edinet';
+import { ExtractionPreview } from '@/components/stocks/extraction-preview';
 import type { AnnualReport } from '@/lib/edinet/types';
 import type { ExtractionSummary } from '@/lib/edinet/csv-parser';
-import { NULL_DISPLAY } from '@/lib/format';
 
 export function EdinetSearch({
   stockId,
@@ -29,13 +21,10 @@ export function EdinetSearch({
   const [isSearching, setIsSearching] = useState(false);
   const [isSaving, setIsSaving] = useState<string | null>(null);
   const [isExtracting, setIsExtracting] = useState<string | null>(null);
-  const [isSavingData, setIsSavingData] = useState(false);
   const [results, setResults] = useState<AnnualReport[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set());
   const [extraction, setExtraction] = useState<ExtractionSummary | null>(null);
-  const [extractionDocID, setExtractionDocID] = useState<string | null>(null);
-  const [dataSaved, setDataSaved] = useState(false);
 
   // デフォルト: 直近1年間を検索
   const today = new Date();
@@ -65,7 +54,6 @@ export function EdinetSearch({
   const handleExtract = async (docID: string) => {
     setIsExtracting(docID);
     setExtraction(null);
-    setDataSaved(false);
 
     const result = await extractFinancialData(docID);
 
@@ -73,31 +61,9 @@ export function EdinetSearch({
 
     if (result.success && result.data) {
       setExtraction(result.data);
-      setExtractionDocID(docID);
       toast.success('財務データを抽出しました');
     } else {
       toast.error(result.error ?? 'データ抽出に失敗しました');
-    }
-  };
-
-  const handleSaveData = async () => {
-    if (!extraction || !extractionDocID) return;
-
-    // 期末日から年度を推定
-    const periodEnd = extraction.periodEnd;
-    const fiscalYear = periodEnd
-      ? new Date(periodEnd).getFullYear()
-      : new Date().getFullYear();
-
-    setIsSavingData(true);
-    const result = await saveExtractedData(stockId, extraction, fiscalYear);
-    setIsSavingData(false);
-
-    if (result.success) {
-      setDataSaved(true);
-      toast.success(`${fiscalYear}年度の財務データを保存しました`);
-    } else {
-      toast.error(result.error ?? '保存に失敗しました');
     }
   };
 
@@ -253,73 +219,12 @@ export function EdinetSearch({
         </div>
       )}
 
-      {/* 抽出結果プレビュー */}
+      {/* 抽出結果プレビュー（編集可能） */}
       {extraction && (
-        <div className="space-y-3 rounded-lg border p-4">
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold">
-              抽出結果（{extraction.accountingStandard}）
-              {extraction.periodEnd && <span className="ml-2 text-muted-foreground font-normal">期末: {extraction.periodEnd}</span>}
-            </h4>
-            {dataSaved ? (
-              <Badge className="bg-green-100 text-green-800 border-green-300">
-                <Check className="mr-1 h-3 w-3" />
-                保存済み
-              </Badge>
-            ) : (
-              <Button size="sm" onClick={handleSaveData} disabled={isSavingData}>
-                {isSavingData ? (
-                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-1 h-4 w-4" />
-                )}
-                財務データに反映
-              </Button>
-            )}
-          </div>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>項目</TableHead>
-                <TableHead className="text-right">抽出値</TableHead>
-                <TableHead>マッチしたタグ</TableHead>
-                <TableHead>信頼度</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {extraction.results.map((r) => (
-                <TableRow key={r.metricKey}>
-                  <TableCell className="text-sm">{r.label}</TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">
-                    {r.value != null ? r.value.toLocaleString() : NULL_DISPLAY}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {r.matchedTag ?? NULL_DISPLAY}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={
-                        r.confidence === 'high'
-                          ? 'text-green-700 border-green-300'
-                          : r.confidence === 'medium'
-                            ? 'text-yellow-700 border-yellow-300'
-                            : 'text-red-700 border-red-300'
-                      }
-                    >
-                      {r.confidence === 'high' ? '高' : r.confidence === 'medium' ? '中' : '低'}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {extraction.results.some((r) => r.value === null) && (
-            <p className="text-xs text-muted-foreground">
-              値が「—」の項目は自動抽出できませんでした。保存後に手動で編集できます。
-            </p>
-          )}
-        </div>
+        <ExtractionPreview
+          stockId={stockId}
+          extraction={extraction}
+        />
       )}
     </div>
   );
