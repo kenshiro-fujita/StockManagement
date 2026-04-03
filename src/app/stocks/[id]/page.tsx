@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StockDeleteButton } from '@/components/stocks/stock-delete-button';
 import { StockDetailClient } from '@/components/stocks/stock-detail-client';
+import { RosterSection } from '@/components/stocks/roster-section';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
+import type { RosterCategory } from '@/lib/types/roster';
 import { createClient } from '@/lib/supabase/server';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +21,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ data: stock }, { data: financialData }, { data: parametersData }] = await Promise.all([
     supabase
       .from('stocks')
-      .select('id, stock_code, company_name, market, sector, business_segment')
+      .select('id, stock_code, company_name, market, sector, business_segment, roster_category')
       .eq('id', id)
       .single(),
     supabase
@@ -66,18 +68,24 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     : null;
 
   const overviewContent = (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
-      <dt className="font-medium text-muted-foreground">銘柄コード</dt>
-      <dd>{stock.stock_code}</dd>
-      <dt className="font-medium text-muted-foreground">企業名</dt>
-      <dd>{stock.company_name}</dd>
-      <dt className="font-medium text-muted-foreground">市場</dt>
-      <dd>{stock.market ?? '—'}</dd>
-      <dt className="font-medium text-muted-foreground">業種</dt>
-      <dd>{stock.sector ?? '—'}</dd>
-      <dt className="font-medium text-muted-foreground">事業セグメント</dt>
-      <dd>{stock.business_segment ?? '—'}</dd>
-    </dl>
+    <div className="space-y-6">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3">
+        <dt className="font-medium text-muted-foreground">銘柄コード</dt>
+        <dd>{stock.stock_code}</dd>
+        <dt className="font-medium text-muted-foreground">企業名</dt>
+        <dd>{stock.company_name}</dd>
+        <dt className="font-medium text-muted-foreground">市場</dt>
+        <dd>{stock.market ?? '—'}</dd>
+        <dt className="font-medium text-muted-foreground">業種</dt>
+        <dd>{stock.sector ?? '—'}</dd>
+        <dt className="font-medium text-muted-foreground">事業セグメント</dt>
+        <dd>{stock.business_segment ?? '—'}</dd>
+      </dl>
+      <RosterSection
+        stockId={stock.id}
+        currentCategory={(stock.roster_category as RosterCategory | null) ?? null}
+      />
+    </div>
   );
 
   return (

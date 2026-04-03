@@ -7,8 +7,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { formatStockPrice, formatPercent, NULL_DISPLAY } from '@/lib/format';
 import { getValuationLevel } from '@/lib/calc/safety';
+import type { RosterCategory } from '@/lib/types/roster';
+import {
+  ROSTER_CATEGORY_LABELS,
+  ROSTER_BADGE_STYLES,
+} from '@/lib/schemas/roster';
 
 export type StockWithIndicators = {
   id: string;
@@ -18,6 +24,7 @@ export type StockWithIndicators = {
   sector: string | null;
   theoryPrice: number | null;
   safetyRateCurrent: number | null;
+  rosterCategory: RosterCategory | null;
 };
 
 const SAFETY_RATE_COLORS: Record<string, string> = {
@@ -33,6 +40,7 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
         <TableRow>
           <TableHead>銘柄コード</TableHead>
           <TableHead>企業名</TableHead>
+          <TableHead>ロースター</TableHead>
           <TableHead>市場</TableHead>
           <TableHead>業種</TableHead>
           <TableHead className="tabular-nums text-right">理論株価</TableHead>
@@ -55,6 +63,15 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 </Link>
               </TableCell>
               <TableCell>{stock.company_name}</TableCell>
+              <TableCell>
+                {stock.rosterCategory ? (
+                  <Badge variant="outline" className={ROSTER_BADGE_STYLES[stock.rosterCategory].className}>
+                    {ROSTER_CATEGORY_LABELS[stock.rosterCategory]}
+                  </Badge>
+                ) : (
+                  <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                )}
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {stock.market ?? NULL_DISPLAY}
               </TableCell>

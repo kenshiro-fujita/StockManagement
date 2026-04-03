@@ -69,6 +69,14 @@ development_status:
   4-6-calc-logic-transparency: done
   epic-4-retrospective: optional
 
+  epic-6: in-progress
+  6-1-roster-classification: done
+
+  epic-7: backlog
+  7-1-multi-stock-comparison: backlog
+  7-2-stock-rating-and-priority: backlog
+  epic-7-retrospective: optional
+
   epic-5: backlog
   epic-5-retrospective: optional
 

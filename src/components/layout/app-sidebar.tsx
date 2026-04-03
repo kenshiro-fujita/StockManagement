@@ -22,12 +22,15 @@ import {
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { formatStockPrice } from '@/lib/format';
+import type { RosterCategory } from '@/lib/types/roster';
+import { ROSTER_CATEGORY_SHORT_LABELS } from '@/lib/schemas/roster';
 
 export type SidebarStock = {
   id: string;
   stock_code: string;
   company_name: string;
   theoryPrice: number | null;
+  rosterCategory: RosterCategory | null;
 };
 
 export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
@@ -86,8 +89,11 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
                         <span className="truncate">
                           {stock.stock_code} {stock.company_name}
                         </span>
-                        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                          {formatStockPrice(stock.theoryPrice)}
+                        <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+                          {stock.rosterCategory && (
+                            <span className="shrink-0">{ROSTER_CATEGORY_SHORT_LABELS[stock.rosterCategory]}</span>
+                          )}
+                          <span className="tabular-nums">{formatStockPrice(stock.theoryPrice)}</span>
                         </span>
                       </Link>
                     </SidebarMenuButton>

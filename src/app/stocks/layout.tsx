@@ -14,6 +14,7 @@ import { connection } from 'next/server';
 import { calculateAllIndicators } from '@/lib/calc';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { ParametersRow } from '@/lib/types/parameters';
+import type { RosterCategory } from '@/lib/types/roster';
 
 async function SidebarWithStocks() {
   await connection();
@@ -23,7 +24,7 @@ async function SidebarWithStocks() {
     await Promise.all([
       supabase
         .from('stocks')
-        .select('id, stock_code, company_name')
+        .select('id, stock_code, company_name, roster_category')
         .order('created_at', { ascending: false }),
       supabase
         .from('financial_data')
@@ -68,7 +69,11 @@ async function SidebarWithStocks() {
       }
     }
 
-    return { ...stock, theoryPrice };
+    return {
+      ...stock,
+      theoryPrice,
+      rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
+    };
   });
 
   return <AppSidebar stocks={sidebarStocks} />;

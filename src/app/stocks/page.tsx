@@ -9,6 +9,7 @@ import { connection } from 'next/server';
 import { calculateAllIndicators } from '@/lib/calc';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { ParametersRow } from '@/lib/types/parameters';
+import type { RosterCategory } from '@/lib/types/roster';
 
 async function StockList() {
   await connection();
@@ -19,7 +20,7 @@ async function StockList() {
     await Promise.all([
       supabase
         .from('stocks')
-        .select('id, stock_code, company_name, market, sector')
+        .select('id, stock_code, company_name, market, sector, roster_category')
         .order('created_at', { ascending: false }),
       supabase
         .from('financial_data')
@@ -89,6 +90,7 @@ async function StockList() {
       ...stock,
       theoryPrice,
       safetyRateCurrent,
+      rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
     };
   });
 
