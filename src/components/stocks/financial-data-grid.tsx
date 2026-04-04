@@ -105,7 +105,7 @@ function useColumnResize(initialWidth: number) {
   return { width, onMouseDown };
 }
 
-/** リサイズ可能な列ヘッダー */
+/** リサイズ可能な列ヘッダー。右端にドラッグハンドル（太め+色付き）を表示 */
 function ResizableHead({
   children,
   initialWidth = 120,
@@ -118,11 +118,13 @@ function ResizableHead({
   const { width, onMouseDown } = useColumnResize(initialWidth);
 
   return (
-    <TableHead className={`relative ${className}`} style={{ width, minWidth: width }}>
+    <TableHead className={`relative select-none ${className}`} style={{ width, minWidth: width }}>
       {children}
+      {/* ドラッグハンドル: 幅4px、ホバーで色がつく、カーソルが変わる */}
       <div
         onMouseDown={onMouseDown}
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/30"
+        className="absolute right-0 top-0 h-full w-[4px] cursor-col-resize bg-border hover:bg-primary/50 active:bg-primary"
+        title="ドラッグで列幅を変更"
         aria-hidden="true"
       />
     </TableHead>
@@ -273,7 +275,7 @@ export function FinancialDataGrid({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-background" style={{ minWidth: 160 }}>
+              <TableHead className="sticky left-0 z-10 bg-background w-[130px] min-w-[130px]">
                 項目
               </TableHead>
               {sorted.map((row) => (
