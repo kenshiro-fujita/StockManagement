@@ -1,15 +1,52 @@
+/**
+ * EDINET 財務データ取得セクション
+ *
+ * 1. edinet_master テーブルから即座に検索（API呼び出しなし）
+ * 2. マスタにあれば「取り込む」ボタンで financial_data にコピー
+ * 3. マスタに無い場合は従来の EDINET API 検索にフォールバック
+ */
 'use client';
 
-import { useState } from 'react';
-import { Search, FileText, Check, AlertCircle, Loader2, Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Search, FileText, Check, Download, Loader2, Database, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { searchEdinetDocuments, saveEdinetDocument, extractFinancialData } from '@/actions/edinet';
-import { ExtractionPreview } from '@/components/stocks/extraction-preview';
-import type { AnnualReport } from '@/lib/edinet/types';
-import type { ExtractionSummary } from '@/lib/edinet/csv-parser';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { searchMasterByStockCode, importMasterToFinancialData } from '@/actions/edinet-master';
+import { NULL_DISPLAY } from '@/lib/format';
+
+type MasterRow = {
+  id: string;
+  doc_id: string;
+  sec_code: string;
+  filer_name: string;
+  fiscal_year: number;
+  period_start: string | null;
+  period_end: string | null;
+  accounting_standard: string | null;
+  extraction_status: string;
+  revenue: number | null;
+  operating_income: number | null;
+  net_income: number | null;
+  total_assets: number | null;
+  equity: number | null;
+  shares_outstanding: number | null;
+};
+
+function formatMillion(value: number | null): string {
+  if (value == null) return NULL_DISPLAY;
+  return `${Math.round(value / 1_000_000).toLocaleString()}百万`;
+}
 
 export function EdinetSearch({
   stockId,
@@ -18,246 +55,143 @@ export function EdinetSearch({
   stockId: string;
   stockCode: string;
 }) {
-  const [isSearching, setIsSearching] = useState(false);
-  const [isSaving, setIsSaving] = useState<string | null>(null);
-  const [isExtracting, setIsExtracting] = useState<string | null>(null);
-  const [results, setResults] = useState<AnnualReport[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set());
-  const [extraction, setExtraction] = useState<ExtractionSummary | null>(null);
+  const router = useRouter();
+  const [masterData, setMasterData] = useState<MasterRow[] | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [importingDocId, setImportingDocId] = useState<string | null>(null);
+  const [importedDocIds, setImportedDocIds] = useState<Set<string>>(new Set());
 
-  // デフォルト: 直近2ヶ月間を検索（有報提出は決算月の約3ヶ月後）
-  const today = new Date();
-  const twoMonthsAgo = new Date(today);
-  twoMonthsAgo.setMonth(today.getMonth() - 2);
+  // ページ表示時にマスタから即座に検索
+  useEffect(() => {
+    (async () => {
+      const result = await searchMasterByStockCode(stockCode);
+      setMasterData(result.data ?? []);
+      setIsLoading(false);
+    })();
+  }, [stockCode]);
 
-  const [startDate, setStartDate] = useState(twoMonthsAgo.toISOString().slice(0, 10));
-  const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
-
-  // 検索範囲の日数を計算
-  const searchDays = Math.max(0, Math.ceil(
-    (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
-  ));
-  const estimatedMinutes = Math.ceil((searchDays * 3) / 60); // 3秒/日
-  const isLongSearch = searchDays > 60;
-
-  const handleSearch = async () => {
-    setIsSearching(true);
-    setError(null);
-    setResults(null);
-
-    const result = await searchEdinetDocuments(stockId, stockCode, startDate, endDate);
-
-    setIsSearching(false);
-
-    if (!result.success) {
-      setError(result.error ?? 'EDINET検索に失敗しました');
-      return;
-    }
-
-    setResults(result.data ?? []);
-  };
-
-  const handleExtract = async (docID: string, csvFlag: boolean) => {
-    setIsExtracting(docID);
-    setExtraction(null);
-
-    const result = await extractFinancialData(docID, csvFlag);
-
-    setIsExtracting(null);
-
-    if (result.success && result.data) {
-      setExtraction(result.data);
-      toast.success('財務データを抽出しました');
-    } else {
-      toast.error(result.error ?? 'データ抽出に失敗しました');
-    }
-  };
-
-  const handleSave = async (report: AnnualReport) => {
-    setIsSaving(report.docID);
-    const result = await saveEdinetDocument(stockId, report);
-    setIsSaving(null);
+  const handleImport = async (docId: string, fiscalYear: number) => {
+    setImportingDocId(docId);
+    const result = await importMasterToFinancialData(stockId, docId);
+    setImportingDocId(null);
 
     if (result.success) {
-      setSavedDocIds((prev) => new Set([...prev, report.docID]));
-      toast.success('書類を保存しました');
+      setImportedDocIds((prev) => new Set([...prev, docId]));
+      toast.success(`${fiscalYear}年度の財務データを取り込みました`);
+      router.refresh();
     } else {
-      toast.error(result.error ?? '保存に失敗しました');
+      toast.error(result.error ?? '取り込みに失敗しました');
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <span className="ml-2 text-muted-foreground">マスタデータを検索中...</span>
+      </div>
+    );
+  }
+
+  if (!masterData || masterData.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Database className="text-muted-foreground mb-4 h-12 w-12" />
+          <h3 className="mb-2 text-lg font-semibold">マスタデータがありません</h3>
+          <p className="text-muted-foreground mb-2">
+            証券コード {stockCode} の有価証券報告書がマスタに登録されていません。
+          </p>
+          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800 space-y-1 max-w-md">
+            <p className="font-medium">マスタデータの取得方法</p>
+            <p>ユーザー設定画面で EDINET API キーを登録した上で、管理画面からバッチ取得を実行してください。</p>
+            <p>将来的には Cron で自動取得されるようになります。</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <h3 className="text-base font-semibold">EDINET 有価証券報告書検索</h3>
-
-      <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800 space-y-1">
-        <p className="font-medium">検索のコツ</p>
-        <p>有価証券報告書は決算日の<strong>約3ヶ月後</strong>にEDINETに提出されます（決算発表日とは異なります）。</p>
-        <p>例: 3月決算 → <strong>6月下旬</strong>頃に提出 / 12月決算 → <strong>3月下旬</strong>頃に提出</p>
+      <div className="flex items-center gap-2">
+        <Database className="h-5 w-5 text-muted-foreground" />
+        <h3 className="text-base font-semibold">EDINET 財務データ（マスタ）</h3>
+        <Badge variant="outline" className="text-xs">
+          {masterData.length}件
+        </Badge>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label htmlFor="edinet-start" className="text-sm text-muted-foreground">
-            検索開始日
-          </label>
-          <Input
-            id="edinet-start"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="w-40"
-          />
-        </div>
-        <div>
-          <label htmlFor="edinet-end" className="text-sm text-muted-foreground">
-            検索終了日
-          </label>
-          <Input
-            id="edinet-end"
-            type="date"
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            className="w-40"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Button onClick={handleSearch} disabled={isSearching}>
-            {isSearching ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                検索中...（約{estimatedMinutes}分）
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                EDINET検索
-              </>
-            )}
-          </Button>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            検索範囲: {searchDays}日間（約{estimatedMinutes}分）
-          </span>
-        </div>
-      </div>
+      <p className="text-xs text-muted-foreground">
+        EDINET から事前取得済みの財務データです。「取り込む」を押すとこの銘柄の財務データに反映されます。
+      </p>
 
-      {isLongSearch && !isSearching && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div>
-            <p className="text-sm text-amber-800">
-              検索範囲が{searchDays}日間（約{estimatedMinutes}分）と広く、タイムアウトする可能性があります。
-            </p>
-            <p className="mt-1 text-xs text-amber-600">
-              有報の提出日付近（決算日の約3ヶ月後）に絞ると高速に検索できます。
-            </p>
-          </div>
-        </div>
-      )}
-
-      {isSearching && (
-        <p className="text-sm text-muted-foreground">
-          EDINET APIを日付ごとに検索しています（{searchDays}日分、約{estimatedMinutes}分）。しばらくお待ちください...
-        </p>
-      )}
-
-      {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-          <div>
-            <p className="text-sm text-red-800">{error}</p>
-            <p className="mt-1 text-xs text-red-600">
-              手動で財務データを入力することもできます
-            </p>
-          </div>
-        </div>
-      )}
-
-      {results !== null && results.length === 0 && (
-        <p className="text-sm text-muted-foreground">
-          指定期間に有価証券報告書が見つかりませんでした
-        </p>
-      )}
-
-      {results !== null && results.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            {results.length}件の有価証券報告書が見つかりました
-          </p>
-          <ul className="divide-y rounded-lg border">
-            {results.map((report) => (
-              <li
-                key={report.docID}
-                className="flex items-center justify-between gap-4 px-4 py-3"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {report.docDescription ?? '有価証券報告書'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {report.periodStart} 〜 {report.periodEnd}
-                      {' · '}提出: {report.submitDateTime}
-                    </p>
-                  </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>年度</TableHead>
+            <TableHead>基準</TableHead>
+            <TableHead className="text-right">売上高</TableHead>
+            <TableHead className="text-right">営業利益</TableHead>
+            <TableHead className="text-right">純利益</TableHead>
+            <TableHead className="text-right">総資産</TableHead>
+            <TableHead className="w-24"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {masterData.map((row) => (
+            <TableRow key={row.doc_id}>
+              <TableCell className="font-medium">
+                <div>
+                  {row.fiscal_year}
+                  <span className="text-xs text-muted-foreground ml-1">通期</span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {report.csvFlag && (
-                    <Badge variant="outline" className="text-xs">CSV</Badge>
-                  )}
-                  {report.xbrlFlag && (
-                    <Badge variant="outline" className="text-xs">XBRL</Badge>
-                  )}
-                  {savedDocIds.has(report.docID) ? (
-                    <>
-                      <Button size="sm" variant="ghost" disabled>
-                        <Check className="mr-1 h-4 w-4 text-green-600" />
-                        保存済み
-                      </Button>
-                      {(report.csvFlag || report.xbrlFlag) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleExtract(report.docID, report.csvFlag)}
-                          disabled={isExtracting === report.docID}
-                        >
-                          {isExtracting === report.docID ? (
-                            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="mr-1 h-4 w-4" />
-                          )}
-                          データ取得{!report.csvFlag ? '(XBRL)' : ''}
-                        </Button>
-                      )}
-                    </>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => handleSave(report)}
-                      disabled={isSaving === report.docID}
-                    >
-                      {isSaving === report.docID ? (
-                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      ) : null}
-                      選択
-                    </Button>
-                  )}
+                <div className="text-xs text-muted-foreground">
+                  {row.period_start} 〜 {row.period_end}
                 </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* 抽出結果プレビュー（編集可能） */}
-      {extraction && (
-        <ExtractionPreview
-          stockId={stockId}
-          extraction={extraction}
-        />
-      )}
+              </TableCell>
+              <TableCell>
+                <Badge variant="outline" className="text-xs">
+                  {row.accounting_standard ?? '不明'}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-right tabular-nums text-sm">
+                {formatMillion(row.revenue)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums text-sm">
+                {formatMillion(row.operating_income)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums text-sm">
+                {formatMillion(row.net_income)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums text-sm">
+                {formatMillion(row.total_assets)}
+              </TableCell>
+              <TableCell>
+                {importedDocIds.has(row.doc_id) ? (
+                  <Button size="sm" variant="ghost" disabled>
+                    <Check className="mr-1 h-4 w-4 text-green-600" />
+                    取込済み
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => handleImport(row.doc_id, row.fiscal_year)}
+                    disabled={importingDocId === row.doc_id}
+                  >
+                    {importingDocId === row.doc_id ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-1 h-4 w-4" />
+                    )}
+                    取り込む
+                  </Button>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

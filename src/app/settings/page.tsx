@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsForm } from '@/components/settings/settings-form';
+import { EdinetBatchSection } from '@/components/settings/edinet-batch';
 import { getAllSettings } from '@/actions/settings';
 import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
@@ -30,6 +31,9 @@ export default function SettingsPage() {
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
         <SettingsContent />
       </Suspense>
+      <div className="mt-8">
+        <EdinetBatchSection />
+      </div>
     </div>
   );
 }
