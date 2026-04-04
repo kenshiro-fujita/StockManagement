@@ -45,20 +45,20 @@ development_status:
   1-2-user-registration-signup: done
   1-3-user-login-logout-session: done
   1-4-authenticated-app-shell-layout: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: done
   2-1-stock-registration: done
   2-2-stock-list-view: done
   2-3-stock-edit-delete: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: done
   3-1-financial-data-input-form: done
   3-2-financial-data-validation: done
   3-3-financial-data-edit: done
   3-4-financial-data-trends: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: done
   4-1-parameter-settings: done
@@ -67,16 +67,16 @@ development_status:
   4-4-realtime-recalculation: done
   4-5-stock-list-theory-price: done
   4-6-calc-logic-transparency: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-6: done
   6-1-roster-classification: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   epic-7: done
   7-1-multi-stock-comparison: done
   7-2-stock-rating-and-priority: done
-  epic-7-retrospective: optional
+  epic-7-retrospective: done
 
   epic-5: done
   5-1-edinet-api-foundation: done
@@ -84,9 +84,9 @@ development_status:
   5-3-user-confirmation-flow: done
   5-4-xbrl-parse-fallback: done
   5-5-mapping-log-and-alerts: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-8: done
   8-1-business-overview: done
   8-2-ai-research-with-provider-abstraction: done
-  epic-8-retrospective: optional
+  epic-8-retrospective: done
