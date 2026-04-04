@@ -14,5 +14,12 @@ export type FullFinancialDataRow = {
   shares_outstanding: number | null;
   interest_expense: number | null;
   current_stock_price: number | null;
+  cash_and_equivalents: number | null;
+  current_assets: number | null;
+  investments_and_other_assets: number | null;
+  current_liabilities: number | null;
+  non_current_liabilities: number | null;
+  shareholders_equity: number | null;
+  beta: number | null;
   input_unit: string;
 };

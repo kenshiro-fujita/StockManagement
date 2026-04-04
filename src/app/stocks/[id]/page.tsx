@@ -29,7 +29,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     supabase
       .from('financial_data')
       .select(
-        'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity, interest_bearing_debt, operating_cf, investing_cf, shares_outstanding, interest_expense, current_stock_price, input_unit'
+        'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity, interest_bearing_debt, operating_cf, investing_cf, shares_outstanding, interest_expense, current_stock_price, cash_and_equivalents, current_assets, investments_and_other_assets, current_liabilities, non_current_liabilities, shareholders_equity, beta, input_unit'
       )
       .eq('stock_id', id)
       .order('fiscal_year', { ascending: false }),

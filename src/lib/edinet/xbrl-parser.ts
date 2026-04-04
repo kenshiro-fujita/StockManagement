@@ -79,6 +79,10 @@ export async function extractFinancialMetricsFromXbrl(
     'operating_cf', 'investing_cf',
     'issued_shares', 'eps_basic',
     'interest_bearing_debt', 'interest_expense',
+    'cash_and_equivalents', 'current_assets',
+    'investments_and_other_assets',
+    'current_liabilities', 'non_current_liabilities',
+    'shareholders_equity',
   ];
 
   const results = metricKeys.map((key) => extractMetricFromFacts(allFacts, key, standard));
@@ -265,7 +269,11 @@ function extractMetricFromFacts(
     };
   }
 
-  const bsMetrics: MetricKey[] = ['total_assets', 'equity'];
+  const bsMetrics: MetricKey[] = [
+    'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
+    'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
+    'shareholders_equity',
+  ];
   const isBs = bsMetrics.includes(metricKey);
 
   for (const tag of candidates) {

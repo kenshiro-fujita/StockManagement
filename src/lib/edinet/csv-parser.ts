@@ -258,7 +258,11 @@ function extractMetric(
 
   for (const tag of candidates) {
     // B/S項目（資産・負債）は Instant、P/L・CF項目は Duration
-    const bsMetrics: MetricKey[] = ['total_assets', 'equity'];
+    const bsMetrics: MetricKey[] = [
+      'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
+      'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
+      'shareholders_equity',
+    ];
     const isBs = bsMetrics.includes(metricKey);
 
     const matchingFacts = facts.filter((f) => {
@@ -339,6 +343,12 @@ export async function extractFinancialMetrics(
     'eps_basic',
     'interest_bearing_debt',
     'interest_expense',
+    'cash_and_equivalents',
+    'current_assets',
+    'investments_and_other_assets',
+    'current_liabilities',
+    'non_current_liabilities',
+    'shareholders_equity',
   ];
 
   const results = metricKeys.map((key) => extractMetric(allFacts, key, standard));

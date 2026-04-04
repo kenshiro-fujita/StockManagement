@@ -30,20 +30,32 @@ export type MetricKey =
   | 'issued_shares'
   | 'eps_basic'
   | 'interest_bearing_debt'
-  | 'interest_expense';
+  | 'interest_expense'
+  | 'cash_and_equivalents'
+  | 'current_assets'
+  | 'investments_and_other_assets'
+  | 'current_liabilities'
+  | 'non_current_liabilities'
+  | 'shareholders_equity';
 
 export const METRIC_LABELS: Record<MetricKey, string> = {
   revenue: '売上高',
   operating_profit: '営業利益',
   net_income_parent: '当期純利益（親会社帰属）',
   total_assets: '総資産',
-  equity: '自己資本/純資産',
+  equity: '純資産',
   operating_cf: '営業CF',
   investing_cf: '投資CF',
   issued_shares: '発行済株式数',
   eps_basic: 'EPS（基本）',
   interest_bearing_debt: '有利子負債',
   interest_expense: '支払利息',
+  cash_and_equivalents: '現金及び等価物',
+  current_assets: '流動資産',
+  investments_and_other_assets: '投資その他の資産',
+  current_liabilities: '流動負債',
+  non_current_liabilities: '固定負債',
+  shareholders_equity: '株主資本',
 };
 
 /**
@@ -106,6 +118,36 @@ export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, s
     JGAAP: ['InterestExpenses', 'InterestExpense', 'InterestExpensesNOE'],
     IFRS: ['InterestExpense', 'FinanceCosts'],
     USGAAP: ['InterestExpense'],
+  },
+  cash_and_equivalents: {
+    JGAAP: ['CashAndDeposits', 'CashAndCashEquivalents'],
+    IFRS: ['CashAndCashEquivalents', 'CashAndDeposits'],
+    USGAAP: ['CashAndCashEquivalentsAtCarryingValue'],
+  },
+  current_assets: {
+    JGAAP: ['CurrentAssets'],
+    IFRS: ['CurrentAssets'],
+    USGAAP: ['AssetsCurrent'],
+  },
+  investments_and_other_assets: {
+    JGAAP: ['InvestmentsAndOtherAssets'],
+    IFRS: ['OtherNonCurrentAssets', 'InvestmentsAndOtherAssets'],
+    USGAAP: ['OtherAssetsNoncurrent'],
+  },
+  current_liabilities: {
+    JGAAP: ['CurrentLiabilities'],
+    IFRS: ['CurrentLiabilities'],
+    USGAAP: ['LiabilitiesCurrent'],
+  },
+  non_current_liabilities: {
+    JGAAP: ['NoncurrentLiabilities', 'FixedLiabilities'],
+    IFRS: ['NoncurrentLiabilities'],
+    USGAAP: ['LiabilitiesNoncurrent'],
+  },
+  shareholders_equity: {
+    JGAAP: ['ShareholdersEquity', 'StockholdersEquity'],
+    IFRS: ['EquityAttributableToOwnersOfParent'],
+    USGAAP: ['StockholdersEquity'],
   },
 };
 

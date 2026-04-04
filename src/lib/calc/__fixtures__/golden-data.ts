@@ -40,6 +40,13 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     shares_outstanding: 100_000_000,    // 1億株
     interest_expense: 200_000_000,      // 2億円
     current_stock_price: 250,           // 250円/株
+    cash_and_equivalents: null,
+    current_assets: null,
+    investments_and_other_assets: null,
+    current_liabilities: null,
+    non_current_liabilities: null,
+    shareholders_equity: null,
+    beta: null,
     input_unit: 'yen',
   },
   {
@@ -59,6 +66,13 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     shares_outstanding: 100_000_000,    // 1億株
     interest_expense: 250_000_000,      // 2.5億円
     current_stock_price: 220,           // 220円/株
+    cash_and_equivalents: null,
+    current_assets: null,
+    investments_and_other_assets: null,
+    current_liabilities: null,
+    non_current_liabilities: null,
+    shareholders_equity: null,
+    beta: null,
     input_unit: 'yen',
   },
   {
@@ -78,6 +92,13 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     shares_outstanding: 100_000_000,    // 1億株
     interest_expense: 300_000_000,      // 3億円
     current_stock_price: 200,           // 200円/株
+    cash_and_equivalents: null,
+    current_assets: null,
+    investments_and_other_assets: null,
+    current_liabilities: null,
+    non_current_liabilities: null,
+    shareholders_equity: null,
+    beta: null,
     input_unit: 'yen',
   },
 ];

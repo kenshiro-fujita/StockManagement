@@ -40,24 +40,42 @@ import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 /** 表示する財務項目の定義 */
 const GRID_ROWS = [
+  // P/L
   { key: 'revenue', label: '売上高', required: true, unit: '百万円' },
   { key: 'operating_income', label: '営業利益', required: true, unit: '百万円' },
   { key: 'net_income', label: '当期純利益', required: true, unit: '百万円' },
+  { key: 'interest_expense', label: '支払利息', required: false, unit: '百万円' },
+  // B/S 資産
+  { key: 'cash_and_equivalents', label: '現金及び等価物', required: false, unit: '百万円' },
+  { key: 'current_assets', label: '流動資産', required: false, unit: '百万円' },
+  { key: 'investments_and_other_assets', label: '投資その他の資産', required: false, unit: '百万円' },
   { key: 'total_assets', label: '総資産', required: true, unit: '百万円' },
-  { key: 'equity', label: '自己資本', required: true, unit: '百万円' },
+  // B/S 負債
+  { key: 'current_liabilities', label: '流動負債', required: false, unit: '百万円' },
+  { key: 'non_current_liabilities', label: '固定負債', required: false, unit: '百万円' },
   { key: 'interest_bearing_debt', label: '有利子負債', required: false, unit: '百万円' },
+  // B/S 純資産
+  { key: 'shareholders_equity', label: '株主資本', required: false, unit: '百万円' },
+  { key: 'equity', label: '純資産', required: true, unit: '百万円' },
+  // CF
   { key: 'operating_cf', label: '営業CF', required: false, unit: '百万円' },
   { key: 'investing_cf', label: '投資CF', required: false, unit: '百万円' },
+  // その他
   { key: 'shares_outstanding', label: '発行済株式数', required: false, unit: '株' },
-  { key: 'interest_expense', label: '支払利息', required: false, unit: '百万円' },
   { key: 'current_stock_price', label: '現在株価', required: false, unit: '円' },
+  { key: 'beta', label: 'β値', required: false, unit: '' },
 ] as const;
 
 type GridRowKey = (typeof GRID_ROWS)[number]['key'];
 
+/** 単位変換不要なフィールド（株数、円、倍率はそのまま表示） */
+const NO_MILLION_CONVERSION = new Set<string>([
+  'shares_outstanding', 'current_stock_price', 'beta',
+]);
+
 function toDisplayValue(value: number | null, key: GridRowKey): string {
   if (value == null) return '';
-  if (key === 'shares_outstanding' || key === 'current_stock_price') return String(value);
+  if (NO_MILLION_CONVERSION.has(key)) return String(value);
   return String(Math.round(value / 1_000_000));
 }
 
@@ -65,7 +83,7 @@ function fromDisplayValue(displayValue: string, key: GridRowKey): number | null 
   if (displayValue.trim() === '') return null;
   const num = Number(displayValue.replace(/,/g, ''));
   if (isNaN(num)) return null;
-  if (key === 'shares_outstanding' || key === 'current_stock_price') return num;
+  if (NO_MILLION_CONVERSION.has(key)) return num;
   return num * 1_000_000;
 }
 
@@ -317,6 +335,42 @@ export function FinancialDataGrid({
                 ))}
               </TableRow>
             ))}
+
+            {/* 計算行: FCF */}
+            <TableRow className="bg-muted/30">
+              <TableCell className="sticky left-0 z-10 bg-muted/30 text-sm font-medium">
+                FCF <span className="text-xs text-muted-foreground ml-1">(百万円)</span>
+              </TableCell>
+              {sorted.map((row) => {
+                const opCf = fromDisplayValue(cells[row.id]?.operating_cf ?? '', 'operating_cf');
+                const invCf = fromDisplayValue(cells[row.id]?.investing_cf ?? '', 'investing_cf');
+                const fcf = opCf != null && invCf != null ? Math.round((opCf + invCf) / 1_000_000) : null;
+                return (
+                  <TableCell key={row.id} className="text-right tabular-nums text-sm p-2">
+                    {fcf != null ? fcf.toLocaleString() : '—'}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+
+            {/* 計算行: 負債調達コスト */}
+            <TableRow className="bg-muted/30">
+              <TableCell className="sticky left-0 z-10 bg-muted/30 text-sm font-medium">
+                負債調達コスト <span className="text-xs text-muted-foreground ml-1">(%)</span>
+              </TableCell>
+              {sorted.map((row) => {
+                const intExp = fromDisplayValue(cells[row.id]?.interest_expense ?? '', 'interest_expense');
+                const debt = fromDisplayValue(cells[row.id]?.interest_bearing_debt ?? '', 'interest_bearing_debt');
+                const costOfDebt = intExp != null && debt != null && debt !== 0
+                  ? ((intExp / debt) * 100).toFixed(2)
+                  : null;
+                return (
+                  <TableCell key={row.id} className="text-right tabular-nums text-sm p-2">
+                    {costOfDebt != null ? `${costOfDebt}%` : '—'}
+                  </TableCell>
+                );
+              })}
+            </TableRow>
 
             {/* 操作行 */}
             <TableRow>
