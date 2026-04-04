@@ -1,20 +1,27 @@
 /**
  * AI プロバイダーのエントリーポイント
  *
- * 現在のプロバイダーを返すファクトリ関数。
- * プロバイダーを切り替えるにはこの関数の中身を変えるだけでよい。
+ * APIキーの解決順序:
+ * 1. user_settings テーブル（設定画面で保存したキー）
+ * 2. 環境変数 ANTHROPIC_API_KEY（フォールバック）
  */
 import type { AIProvider } from './provider';
 import { ClaudeProvider } from './claude';
+import { getSetting } from '@/actions/settings';
 
 /**
  * 現在の AI プロバイダーを取得する
- *
- * 将来的に環境変数（AI_PROVIDER=claude|openai|gemini）で
- * 切り替える拡張も可能だが、現時点では Claude 固定。
+ * user_settings のキーを優先し、なければ環境変数にフォールバック
  */
-export function getAIProvider(): AIProvider {
-  return new ClaudeProvider();
+export async function getAIProvider(): Promise<AIProvider> {
+  const userKey = await getSetting('anthropic_api_key');
+  const apiKey = userKey || process.env.ANTHROPIC_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('Anthropic APIキーが設定されていません。ユーザー設定画面から登録してください。');
+  }
+
+  return new ClaudeProvider(apiKey);
 }
 
 export type { AIProvider, AIResearchRequest, AIResearchResponse } from './provider';

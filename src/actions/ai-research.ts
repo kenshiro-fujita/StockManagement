@@ -64,7 +64,7 @@ export async function runAIResearch(
 
   try {
     const financialSummary = await buildFinancialSummary(stockId);
-    const provider = getAIProvider();
+    const provider = await getAIProvider();
 
     const result = await provider.research({
       companyName: stock.company_name,

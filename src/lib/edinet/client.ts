@@ -21,11 +21,27 @@ const MAX_RETRIES = 3;
 /** リトライ間隔のベース値（レート制限対策: 3秒） */
 const RETRY_BASE_DELAY_MS = 3_000;
 
-/** 環境変数から EDINET API キーを取得する */
-function getApiKey(): string {
-  const key = process.env.EDINET_API_KEY;
-  if (!key) throw new Error('EDINET_API_KEY が設定されていません');
-  return key;
+/** EDINET API キーを取得する（user_settings → 環境変数の順で解決） */
+let _cachedApiKey: string | null = null;
+
+async function resolveApiKey(): Promise<string> {
+  if (_cachedApiKey) return _cachedApiKey;
+  try {
+    const { getSetting } = await import('@/actions/settings');
+    const userKey = await getSetting('edinet_api_key');
+    if (userKey) {
+      _cachedApiKey = userKey;
+      return userKey;
+    }
+  } catch {
+    // Server Action が使えない場合はフォールバック
+  }
+  const envKey = process.env.EDINET_API_KEY;
+  if (envKey) {
+    _cachedApiKey = envKey;
+    return envKey;
+  }
+  throw new Error('EDINET APIキーが設定されていません。ユーザー設定画面から登録してください。');
 }
 
 /**
@@ -88,7 +104,7 @@ export async function fetchDocumentList(date: string): Promise<EdinetDocListResp
   const url = new URL(`${EDINET_BASE_URL}/documents.json`);
   url.searchParams.set('date', date);
   url.searchParams.set('type', '2');
-  url.searchParams.set('Subscription-Key', getApiKey());
+  url.searchParams.set('Subscription-Key', await resolveApiKey());
 
   const res = await fetchWithRetry(url.toString());
   return (await res.json()) as EdinetDocListResponse;
@@ -104,7 +120,7 @@ export async function fetchDocumentData(
 ): Promise<ArrayBuffer> {
   const url = new URL(`${EDINET_BASE_URL}/documents/${docID}`);
   url.searchParams.set('type', String(type));
-  url.searchParams.set('Subscription-Key', getApiKey());
+  url.searchParams.set('Subscription-Key', await resolveApiKey());
 
   const res = await fetchWithRetry(url.toString());
 

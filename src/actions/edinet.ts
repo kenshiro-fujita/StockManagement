@@ -34,10 +34,6 @@ export async function searchEdinetDocuments(
     return { success: false, error: '認証が必要です' };
   }
 
-  if (!process.env.EDINET_API_KEY) {
-    return { success: false, error: 'EDINET APIキーが設定されていません。管理者に連絡してください。' };
-  }
-
   try {
     const reports = await searchAnnualReports(stockCode, startDate, endDate);
 

@@ -76,18 +76,24 @@ function parseResponse(text: string): Omit<AIResearchResponse, 'model' | 'resear
 
 export class ClaudeProvider implements AIProvider {
   readonly name = 'claude';
-  private client: Anthropic;
+  private client: Anthropic | null = null;
+  private apiKey: string;
   private model: string;
 
-  constructor(model = 'claude-sonnet-4-20250514') {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error('ANTHROPIC_API_KEY が設定されていません');
-    this.client = new Anthropic({ apiKey });
+  constructor(apiKey: string, model = 'claude-sonnet-4-20250514') {
+    this.apiKey = apiKey;
     this.model = model;
   }
 
+  private getClient(): Anthropic {
+    if (!this.client) {
+      this.client = new Anthropic({ apiKey: this.apiKey });
+    }
+    return this.client;
+  }
+
   async research(request: AIResearchRequest): Promise<AIResearchResponse> {
-    const message = await this.client.messages.create({
+    const message = await this.getClient().messages.create({
       model: this.model,
       max_tokens: 2048,
       system: SYSTEM_PROMPT,
