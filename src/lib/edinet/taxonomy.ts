@@ -52,27 +52,27 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
  */
 export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, string[]>>> = {
   revenue: {
-    JGAAP: ['NetSales', 'Revenues', 'OperatingRevenues'],
+    JGAAP: ['NetSales', 'NetSalesSummaryOfBusinessResults', 'Revenues', 'OperatingRevenues'],
     IFRS: ['Revenue', 'SalesRevenues', 'TotalNetRevenues', 'OperatingRevenues', 'NetSales'],
     USGAAP: ['Revenues', 'SalesRevenueNet'],
   },
   operating_profit: {
-    JGAAP: ['OperatingIncome'],
+    JGAAP: ['OperatingIncome', 'OperatingIncomeSummaryOfBusinessResults'],
     IFRS: ['OperatingProfit', 'OperatingProfitLoss'],
     USGAAP: ['OperatingIncomeLoss'],
   },
   net_income_parent: {
-    JGAAP: ['ProfitLossAttributableToOwnersOfParent'],
+    JGAAP: ['ProfitLossAttributableToOwnersOfParent', 'ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults'],
     IFRS: ['ProfitAttributableToOwnersOfParent'],
     USGAAP: ['NetIncomeLossAvailableToCommonStockholders'],
   },
   total_assets: {
-    JGAAP: ['TotalAssets'],
+    JGAAP: ['TotalAssets', 'TotalAssetsSummaryOfBusinessResults'],
     IFRS: ['Assets', 'TotalAssets'],
     USGAAP: ['AssetsTotal'],
   },
   equity: {
-    JGAAP: ['NetAssets'],
+    JGAAP: ['NetAssets', 'NetAssetsSummaryOfBusinessResults'],
     IFRS: ['TotalEquity', 'Equity'],
     USGAAP: ['StockholdersEquity'],
   },
@@ -87,7 +87,7 @@ export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, s
     USGAAP: ['NetCashProvidedByUsedInInvestingActivities'],
   },
   issued_shares: {
-    JGAAP: ['NumberOfSharesIssuedSharesVotingRights', 'TotalNumberOfIssuedSharesSummaryOfBusinessResults'],
+    JGAAP: ['TotalNumberOfIssuedSharesSummaryOfBusinessResults', 'NumberOfSharesIssuedSharesVotingRights'],
     IFRS: ['NumberOfSharesIssuedSharesVotingRights', 'TotalNumberOfIssuedSharesSummaryOfBusinessResults'],
     USGAAP: ['CommonStockSharesIssued'],
   },
@@ -103,7 +103,7 @@ export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, s
     USGAAP: ['ShortTermLoansPayable', 'LongTermLoansPayable', 'BondsPayable'],
   },
   interest_expense: {
-    JGAAP: ['InterestExpenses', 'InterestExpense'],
+    JGAAP: ['InterestExpenses', 'InterestExpense', 'InterestExpensesNOE'],
     IFRS: ['InterestExpense', 'FinanceCosts'],
     USGAAP: ['InterestExpense'],
   },

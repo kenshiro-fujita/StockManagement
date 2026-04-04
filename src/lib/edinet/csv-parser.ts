@@ -85,34 +85,48 @@ export async function extractCsvFromZip(zipData: ArrayBuffer): Promise<string[]>
 
 /**
  * TSV テキストを Fact 配列にパースする
+ *
+ * EDINET CSV の実際の列構造（9列、ダブルクォート囲み）:
+ * [0] "要素ID"      — 例: "jppfs_cor:NetSales"
+ * [1] "項目名"      — 例: "売上高"（日本語ラベル）
+ * [2] "コンテキストID" — 例: "CurrentYearDuration"
+ * [3] "相対年度"    — 例: "当期"
+ * [4] "連結・個別"  — 例: "連結" / "個別" / "その他"
+ * [5] "期間・時点"  — 例: "期間" / "時点"
+ * [6] "ユニットID"  — 例: "JPY"
+ * [7] "単位"        — 例: "円"
+ * [8] "値"          — 例: "4112318000"
  */
 export function parseTsvToFacts(tsv: string): CsvFact[] {
   const lines = tsv.split(/\r?\n/).filter((l) => l.length > 0);
-  if (lines.length < 2) return []; // ヘッダー行 + データが必要
+  if (lines.length < 2) return [];
 
-  // ヘッダー行から列インデックスを特定
-  const header = lines[0].split('\t');
-  const colMap: Record<string, number> = {};
-  header.forEach((col, i) => {
-    colMap[col.trim()] = i;
-  });
+  // ヘッダー行から列名→インデックスのマッピングを構築
+  const headerCols = lines[0].split('\t').map((c) => c.replace(/"/g, '').trim());
+  const colIdx = (name: string): number => {
+    const i = headerCols.indexOf(name);
+    return i >= 0 ? i : -1;
+  };
+
+  // EDINET CSV の列名で列インデックスを特定
+  const iElem = colIdx('要素ID') >= 0 ? colIdx('要素ID') : 0;
+  const iCtx = colIdx('コンテキストID') >= 0 ? colIdx('コンテキストID') : 2;
+  const iUnit = colIdx('ユニットID') >= 0 ? colIdx('ユニットID') : 6;
+  const iVal = colIdx('値') >= 0 ? colIdx('値') : 8;
 
   const facts: CsvFact[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split('\t');
-    if (cols.length < 3) continue;
+    const cols = lines[i].split('\t').map((c) => c.replace(/"/g, '').trim());
+    if (cols.length <= iElem) continue;
 
-    // 列名は EDINET CSV のフォーマットに依存
-    // 代表的なパターン: 要素ID / コンテキストID / ユニットID / 値
-    const elementName = cols[0]?.trim() ?? '';
-    const contextId = cols[1]?.trim() ?? '';
-    const unitId = cols[2]?.trim() ?? '';
-    const value = cols[3]?.trim() ?? '';
+    const elementName = cols[iElem] ?? '';
+    const contextId = cols[iCtx] ?? '';
+    const unitId = cols[iUnit] ?? '';
+    const value = cols[iVal] ?? '';
 
     if (!elementName) continue;
 
-    // ローカル名を抽出（名前空間プレフィックス除去）
     const localName = elementName.includes(':')
       ? elementName.split(':').pop()!
       : elementName;

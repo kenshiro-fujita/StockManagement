@@ -47,8 +47,8 @@ describe('normalizeNumber', () => {
 });
 
 describe('parseTsvToFacts', () => {
-  it('ヘッダーとデータ行をパースする', () => {
-    const tsv = 'element\tcontext\tunit\tvalue\njppfs_cor:NetSales\tCurrentYearDuration\tJPY\t1000000';
+  it('EDINET CSV（9列）のヘッダーとデータ行をパースする', () => {
+    const tsv = '"要素ID"\t"項目名"\t"コンテキストID"\t"相対年度"\t"連結・個別"\t"期間・時点"\t"ユニットID"\t"単位"\t"値"\n"jppfs_cor:NetSales"\t"売上高"\t"CurrentYearDuration"\t"当期"\t"連結"\t"期間"\t"JPY"\t"円"\t"1000000"';
     const facts = parseTsvToFacts(tsv);
     expect(facts).toHaveLength(1);
     expect(facts[0].localName).toBe('NetSales');
@@ -57,19 +57,19 @@ describe('parseTsvToFacts', () => {
   });
 
   it('空行をスキップする', () => {
-    const tsv = 'element\tcontext\tunit\tvalue\n\njppfs_cor:NetSales\tCtx\tJPY\t100';
+    const tsv = '"要素ID"\t"項目名"\t"コンテキストID"\t"相対年度"\t"連結・個別"\t"期間・時点"\t"ユニットID"\t"単位"\t"値"\n\n"jppfs_cor:NetSales"\t"売上高"\t"Ctx"\t"当期"\t"連結"\t"期間"\t"JPY"\t"円"\t"100"';
     const facts = parseTsvToFacts(tsv);
     expect(facts).toHaveLength(1);
   });
 
   it('ヘッダーのみの場合は空配列を返す', () => {
-    const tsv = 'element\tcontext\tunit\tvalue';
+    const tsv = '"要素ID"\t"項目名"\t"コンテキストID"\t"相対年度"\t"連結・個別"\t"期間・時点"\t"ユニットID"\t"単位"\t"値"';
     const facts = parseTsvToFacts(tsv);
     expect(facts).toHaveLength(0);
   });
 
   it('名前空間プレフィックスを除去してローカル名を抽出する', () => {
-    const tsv = 'h1\th2\th3\th4\njppfs_cor:TotalAssets\tCtx\tJPY\t999';
+    const tsv = '"要素ID"\t"項目名"\t"コンテキストID"\t"相対年度"\t"連結・個別"\t"期間・時点"\t"ユニットID"\t"単位"\t"値"\n"jppfs_cor:TotalAssets"\t"総資産"\t"Ctx"\t"当期"\t"連結"\t"時点"\t"JPY"\t"円"\t"999"';
     const facts = parseTsvToFacts(tsv);
     expect(facts[0].localName).toBe('TotalAssets');
   });
