@@ -252,16 +252,35 @@ function extractMetric(
   }
 
   // 通常メトリック: 優先順に検索、最初にヒットした値を採用
+  // 発行済株式数とEPSは連結/単体を問わない（企業全体の値なので）
+  const anyConsolidation: MetricKey[] = ['issued_shares', 'eps_basic'];
+  const isAnyConsol = anyConsolidation.includes(metricKey);
+
   for (const tag of candidates) {
     // B/S項目（資産・負債）は Instant、P/L・CF項目は Duration
     const bsMetrics: MetricKey[] = ['total_assets', 'equity'];
     const isBs = bsMetrics.includes(metricKey);
 
-    const matchingFacts = facts.filter(
-      (f) =>
-        f.localName === tag &&
-        (isBs ? isConsolidatedInstant(f.contextId) : isConsolidatedCurrent(f.contextId)),
-    );
+    const matchingFacts = facts.filter((f) => {
+      if (f.localName !== tag) return false;
+      if (!f.contextId.includes('CurrentYear')) return false;
+
+      if (isAnyConsol) {
+        // 発行済株式数/EPS: CurrentYear を含めば連結/単体問わずOK
+        // ただし Member サフィックス付き（株主別明細等）は除外
+        const hasMember = f.contextId.includes('Member');
+        const isPlainInstant = f.contextId === 'CurrentYearInstant' ||
+          f.contextId === 'CurrentYearInstant_NonConsolidatedMember' ||
+          f.contextId === 'CurrentYearDuration' ||
+          f.contextId === 'CurrentYearDuration_NonConsolidatedMember';
+        return isPlainInstant || !hasMember;
+      }
+
+      // 通常: 連結のみ（NonConsolidatedMember を除外）
+      if (f.contextId.includes('NonConsolidatedMember')) return false;
+      if (isBs) return f.contextId.includes('Instant');
+      return true;
+    });
 
     if (matchingFacts.length > 0) {
       const fact = matchingFacts[0];
