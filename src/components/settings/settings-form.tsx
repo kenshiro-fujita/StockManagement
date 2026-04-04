@@ -6,7 +6,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Key, Lock, Eye, EyeOff } from 'lucide-react';
+import { Key, Lock, Eye, EyeOff, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -121,13 +121,99 @@ function PasswordChangeSection() {
   );
 }
 
+function UserProfileSection({
+  userId,
+  email,
+  displayName,
+}: {
+  userId: string;
+  email: string;
+  displayName: string;
+}) {
+  const [name, setName] = useState(displayName);
+  const [newEmail, setNewEmail] = useState(email);
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isSavingEmail, setIsSavingEmail] = useState(false);
+
+  const handleSaveName = async () => {
+    setIsSavingName(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({
+      data: { display_name: name },
+    });
+    setIsSavingName(false);
+    if (error) {
+      toast.error('表示名の更新に失敗しました');
+    } else {
+      toast.success('表示名を更新しました');
+    }
+  };
+
+  const handleSaveEmail = async () => {
+    setIsSavingEmail(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ email: newEmail });
+    setIsSavingEmail(false);
+    if (error) {
+      toast.error('メールアドレスの変更に失敗しました');
+    } else {
+      toast.success('確認メールを送信しました。メール内のリンクをクリックしてください。');
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="text-sm font-medium">ユーザーID</label>
+        <Input value={userId} disabled className="mt-1 font-mono text-xs opacity-60" />
+        <p className="text-xs text-muted-foreground mt-1">変更できません</p>
+      </div>
+      <div>
+        <label className="text-sm font-medium">表示名</label>
+        <div className="flex gap-2 mt-1">
+          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="表示名を入力" />
+          <Button onClick={handleSaveName} disabled={isSavingName} size="sm">
+            {isSavingName ? '保存中...' : '保存'}
+          </Button>
+        </div>
+      </div>
+      <div>
+        <label className="text-sm font-medium">メールアドレス</label>
+        <div className="flex gap-2 mt-1">
+          <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+          <Button onClick={handleSaveEmail} disabled={isSavingEmail || newEmail === email} size="sm" variant="outline">
+            {isSavingEmail ? '送信中...' : '変更'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsForm({
   initialSettings,
+  userId,
+  email,
+  displayName,
 }: {
   initialSettings: Record<string, string>;
+  userId: string;
+  email: string;
+  displayName: string;
 }) {
   return (
     <div className="space-y-8">
+      {/* ユーザー情報 */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2">
+          <User className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-lg font-semibold">ユーザー情報</h2>
+        </div>
+        <div className="rounded-lg border p-4">
+          <UserProfileSection userId={userId} email={email} displayName={displayName} />
+        </div>
+      </section>
+
       {/* APIキー設定 */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">

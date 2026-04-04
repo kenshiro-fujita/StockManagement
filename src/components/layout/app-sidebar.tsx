@@ -39,11 +39,11 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center gap-2 px-2 py-1">
+        <Link href="/stocks" className="flex items-center gap-2 px-2 py-1 hover:opacity-80 transition-opacity">
           <span className="text-sidebar-foreground text-lg font-bold">
             株式分析ツール
           </span>
-        </div>
+        </Link>
       </SidebarHeader>
 
       <SidebarSeparator />
@@ -72,7 +72,7 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
                 >
                   <Link href="/settings">
                     <Settings />
-                    <span>設定</span>
+                    <span>ユーザー設定</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

@@ -2,13 +2,25 @@ import { Suspense } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsForm } from '@/components/settings/settings-form';
 import { getAllSettings } from '@/actions/settings';
+import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
 
 async function SettingsContent() {
   await connection();
-  const settings = await getAllSettings();
+  const [settings, supabase] = await Promise.all([
+    getAllSettings(),
+    createClient(),
+  ]);
+  const { data: { user } } = await supabase.auth.getUser();
 
-  return <SettingsForm initialSettings={settings} />;
+  return (
+    <SettingsForm
+      initialSettings={settings}
+      userId={user?.id ?? ''}
+      email={user?.email ?? ''}
+      displayName={user?.user_metadata?.display_name ?? ''}
+    />
+  );
 }
 
 export default function SettingsPage() {
