@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:qiita.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(mkdir -p /Users/fujita_kenshirou/projects/StockManagement/src/lib/edinet)"
+    ]
+  }
+}

@@ -22,9 +22,15 @@ function TheoryPriceEmpty() {
       <h3 className="mb-2 text-lg font-semibold">
         理論株価を算出できません
       </h3>
-      <p className="text-muted-foreground mb-4">
-        財務データを入力すると理論株価が算出されます
+      <p className="text-muted-foreground mb-2">
+        以下の条件を満たすと理論株価が自動算出されます:
       </p>
+      <ul className="text-sm text-muted-foreground text-left space-y-1 mb-4">
+        <li>1. 「財務データ」タブで1期以上の財務データを登録する</li>
+        <li className="ml-4 text-xs">（必須: 売上高、営業利益、純利益、総資産、自己資本、発行済株式数）</li>
+        <li>2. 「パラメータ」タブで割引率・成長率・実効税率を設定する</li>
+        <li className="ml-4 text-xs">（EDINETタブから自動取得も可能です）</li>
+      </ul>
     </div>
   );
 }

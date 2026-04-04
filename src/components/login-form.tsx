@@ -77,6 +77,12 @@ export function LoginForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
+      <div className="text-center">
+        <h1 className="text-3xl font-bold">株式分析ツール</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          中長期投資のための財務分析・理論株価算出アプリ
+        </p>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle className="text-2xl">ログイン</CardTitle>

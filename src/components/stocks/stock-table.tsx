@@ -96,7 +96,7 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 checked={stocks.length > 0 && selectedIds.size === stocks.length}
                 onChange={toggleAll}
                 aria-label="すべての銘柄を選択"
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-gray-300 bg-white accent-teal-600"
               />
             </TableHead>
             <TableHead>銘柄コード</TableHead>
@@ -124,7 +124,7 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                     checked={isSelected}
                     onChange={() => toggleSelection(stock.id)}
                     aria-label={`${stock.stock_code} ${stock.company_name} を選択`}
-                    className="h-4 w-4 rounded border-gray-300"
+                    className="h-4 w-4 rounded border-gray-300 bg-white accent-teal-600"
                   />
                 </TableCell>
                 <TableCell>

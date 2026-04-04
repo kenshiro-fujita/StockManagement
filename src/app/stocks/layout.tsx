@@ -98,7 +98,7 @@ export default function StocksLayout({
             <SidebarHeader>
               <div className="flex items-center gap-2 px-2 py-1">
                 <span className="text-sidebar-foreground text-lg font-bold">
-                  StockManagement
+                  株式分析ツール
                 </span>
               </div>
             </SidebarHeader>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutList, LogOut } from 'lucide-react';
+import { LayoutList, LogOut, Settings } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -41,7 +41,7 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1">
           <span className="text-sidebar-foreground text-lg font-bold">
-            StockManagement
+            株式分析ツール
           </span>
         </div>
       </SidebarHeader>
@@ -62,6 +62,17 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
                   <Link href="/stocks">
                     <LayoutList />
                     <span>銘柄一覧</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith('/settings')}
+                  asChild
+                >
+                  <Link href="/settings">
+                    <Settings />
+                    <span>設定</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

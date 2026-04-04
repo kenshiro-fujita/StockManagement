@@ -31,6 +31,8 @@ import {
   SECTOR_OPTIONS,
 } from '@/lib/schemas/stocks';
 import { createStock, updateStock } from '@/actions/stocks';
+import { lookupStockByCode } from '@/actions/stock-lookup';
+import { Loader2, Search } from 'lucide-react';
 
 type StockData = {
   id: string;
@@ -43,6 +45,7 @@ type StockData = {
 
 export function StockForm({ stock }: { stock?: StockData }) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLookingUp, setIsLookingUp] = useState(false);
   const router = useRouter();
   const isEditMode = !!stock;
 
@@ -57,6 +60,24 @@ export function StockForm({ stock }: { stock?: StockData }) {
       business_segment: stock?.business_segment ?? '',
     },
   });
+
+  const handleLookup = async () => {
+    const code = form.getValues('stock_code');
+    if (!code || code.length !== 4) {
+      toast.error('4桁の証券コードを入力してください');
+      return;
+    }
+    setIsLookingUp(true);
+    const result = await lookupStockByCode(code);
+    setIsLookingUp(false);
+
+    if (result.success && result.data) {
+      form.setValue('company_name', result.data.companyName, { shouldDirty: true });
+      toast.success(`${result.data.companyName} が見つかりました`);
+    } else {
+      toast.error(result.error ?? '企業情報の取得に失敗しました');
+    }
+  };
 
   const onSubmit = async (data: CreateStockInput) => {
     setIsLoading(true);
@@ -95,9 +116,31 @@ export function StockForm({ stock }: { stock?: StockData }) {
               <FormLabel>
                 銘柄コード <span className="text-destructive">*</span>
               </FormLabel>
-              <FormControl>
-                <Input placeholder="例: 7203" {...field} />
-              </FormControl>
+              <div className="flex gap-2">
+                <FormControl>
+                  <Input placeholder="例: 7203" maxLength={4} {...field} />
+                </FormControl>
+                {!isEditMode && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleLookup}
+                    disabled={isLookingUp}
+                    className="shrink-0"
+                  >
+                    {isLookingUp ? (
+                      <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Search className="mr-1 h-4 w-4" />
+                    )}
+                    自動入力
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                証券コードを入力して「自動入力」を押すと、企業名が自動で入力されます
+              </p>
               <FormMessage />
             </FormItem>
           )}
