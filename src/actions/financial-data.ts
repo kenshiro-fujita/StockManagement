@@ -125,3 +125,30 @@ export async function updateFinancialData(
   revalidatePath(`/stocks/${parsed.data.stock_id}`);
   return { success: true };
 }
+
+/** 財務データを削除する */
+export async function deleteFinancialData(
+  id: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  const { error } = await supabase
+    .from('financial_data')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id);
+
+  if (error) {
+    return { success: false, error: '財務データの削除に失敗しました' };
+  }
+
+  revalidatePath('/stocks');
+  return { success: true };
+}
