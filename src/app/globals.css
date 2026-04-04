@@ -18,8 +18,8 @@
     --secondary-foreground: 200 10% 12%;
     --muted: 200 10% 95%;
     --muted-foreground: 200 5% 45%;
-    --accent: 36 90% 55%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 174 62% 92%;
+    --accent-foreground: 174 62% 20%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
     --border: 200 10% 88%;
@@ -47,8 +47,8 @@
     --secondary-foreground: 200 5% 92%;
     --muted: 200 10% 14%;
     --muted-foreground: 200 5% 60%;
-    --accent: 36 90% 55%;
-    --accent-foreground: 0 0% 10%;
+    --accent: 174 62% 15%;
+    --accent-foreground: 174 62% 85%;
     --destructive: 0 62% 35%;
     --destructive-foreground: 0 0% 100%;
     --border: 200 10% 18%;
@@ -104,14 +104,23 @@
   }
 }
 
-/* Next.js ナビゲーションインジケーター（遷移時の進捗バー）の色を上書き */
-/* Next.js 16 は複数のセレクタパターンを使うため、広範にカバーする */
+/* Next.js 16 ナビゲーションインジケーター（遷移時の進捗バー）の色を上書き */
+/* accent カラー（オレンジ）をプライマリ（ティール）に変更 */
 [data-next-router-progress],
 [data-next-progress],
-#__next-route-announcer ~ div[style*="position: fixed"],
-div[style*="z-index: 99999"] {
+div[style*="z-index: 99999"],
+div[style*="position: fixed"][style*="top: 0"] {
   background: hsl(174 62% 38%) !important;
-  --progress-color: hsl(174 62% 38%) !important;
+}
+/* View Transitions API のクロスフェード色 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.15s;
+}
+/* Next.js 16 内部の進捗バーコンポーネント */
+[class*="progress"],
+[class*="Progress"] {
+  --progress-background: hsl(174 62% 38%);
 }
 
 @theme inline {
