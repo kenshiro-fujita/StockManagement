@@ -26,13 +26,20 @@ export function EdinetSearch({
   const [savedDocIds, setSavedDocIds] = useState<Set<string>>(new Set());
   const [extraction, setExtraction] = useState<ExtractionSummary | null>(null);
 
-  // デフォルト: 直近1年間を検索
+  // デフォルト: 直近2ヶ月間を検索（有報提出は決算月の約3ヶ月後）
   const today = new Date();
-  const oneYearAgo = new Date(today);
-  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  const twoMonthsAgo = new Date(today);
+  twoMonthsAgo.setMonth(today.getMonth() - 2);
 
-  const [startDate, setStartDate] = useState(oneYearAgo.toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(twoMonthsAgo.toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(today.toISOString().slice(0, 10));
+
+  // 検索範囲の日数を計算
+  const searchDays = Math.max(0, Math.ceil(
+    (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
+  ));
+  const estimatedMinutes = Math.ceil((searchDays * 3) / 60); // 3秒/日
+  const isLongSearch = searchDays > 60;
 
   const handleSearch = async () => {
     setIsSearching(true);
@@ -84,6 +91,10 @@ export function EdinetSearch({
     <div className="space-y-4">
       <h3 className="text-base font-semibold">EDINET 有価証券報告書検索</h3>
 
+      <p className="text-xs text-muted-foreground">
+        有価証券報告書は決算日の約3ヶ月後に提出されます（3月決算なら6月頃）。提出日の前後で検索してください。
+      </p>
+
       <div className="flex flex-wrap items-end gap-3">
         <div>
           <label htmlFor="edinet-start" className="text-sm text-muted-foreground">
@@ -109,24 +120,43 @@ export function EdinetSearch({
             className="w-40"
           />
         </div>
-        <Button onClick={handleSearch} disabled={isSearching}>
-          {isSearching ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              検索中...
-            </>
-          ) : (
-            <>
-              <Search className="mr-2 h-4 w-4" />
-              EDINET検索
-            </>
-          )}
-        </Button>
+        <div className="flex flex-col gap-1">
+          <Button onClick={handleSearch} disabled={isSearching}>
+            {isSearching ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                検索中...（約{estimatedMinutes}分）
+              </>
+            ) : (
+              <>
+                <Search className="mr-2 h-4 w-4" />
+                EDINET検索
+              </>
+            )}
+          </Button>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            検索範囲: {searchDays}日間（約{estimatedMinutes}分）
+          </span>
+        </div>
       </div>
+
+      {isLongSearch && !isSearching && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div>
+            <p className="text-sm text-amber-800">
+              検索範囲が{searchDays}日間（約{estimatedMinutes}分）と広く、タイムアウトする可能性があります。
+            </p>
+            <p className="mt-1 text-xs text-amber-600">
+              有報の提出日付近（決算日の約3ヶ月後）に絞ると高速に検索できます。
+            </p>
+          </div>
+        </div>
+      )}
 
       {isSearching && (
         <p className="text-sm text-muted-foreground">
-          EDINET APIを日付ごとに検索しています。しばらくお待ちください...
+          EDINET APIを日付ごとに検索しています（{searchDays}日分、約{estimatedMinutes}分）。しばらくお待ちください...
         </p>
       )}
 
