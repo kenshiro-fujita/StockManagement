@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { createFinancialData, updateFinancialData, deleteFinancialData } from '@/actions/financial-data';
+import { updateFinancialData, deleteFinancialData } from '@/actions/financial-data';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 /** 表示する財務項目の定義 */
@@ -160,27 +160,32 @@ export function FinancialDataGrid({
     const latestYear = sorted.length > 0 ? sorted[0].fiscal_year + 1 : new Date().getFullYear();
     setAddingYear(true);
 
-    const data = {
+    // Server Action に直接 DB 値を渡す（Zod スキーマの文字列→数値変換を経由しない）
+    const supabaseModule = await import('@/lib/supabase/client');
+    const supabase = supabaseModule.createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      setAddingYear(false);
+      toast.error('認証が必要です');
+      return;
+    }
+
+    const { error } = await supabase.from('financial_data').insert({
+      user_id: user.id,
       stock_id: stockId,
       fiscal_year: latestYear,
-      fiscal_quarter: 'FY' as const,
-      consolidation_type: 'consolidated' as const,
-      revenue: '0',
-      operating_income: '0',
-      net_income: '0',
-      total_assets: '0',
-      equity: '0',
-      interest_bearing_debt: '',
-      operating_cf: '',
-      investing_cf: '',
-      shares_outstanding: '',
-      interest_expense: '',
-      current_stock_price: '',
-      input_unit: 'yen' as const,
-    };
+      fiscal_quarter: 'FY',
+      consolidation_type: 'consolidated',
+      revenue: 0,
+      operating_income: 0,
+      net_income: 0,
+      total_assets: 0,
+      equity: 0,
+      input_unit: 'yen',
+    });
 
-    // createFinancialData はZodで文字列→数値変換するため、unknown 経由で型を合わせる
-    const result = await createFinancialData(data as unknown as Parameters<typeof createFinancialData>[0]);
+    const result = { success: !error, error: error?.message };
     setAddingYear(false);
 
     if (result.success) {
