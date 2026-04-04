@@ -139,7 +139,8 @@ export function FinancialDataGrid({
   financialData: FullFinancialDataRow[];
 }) {
   const router = useRouter();
-  const sorted = [...financialData].sort((a, b) => b.fiscal_year - a.fiscal_year);
+  // 古い年度が左、新しい年度が右（昇順）
+  const sorted = [...financialData].sort((a, b) => a.fiscal_year - b.fiscal_year);
 
   const [cells, setCells] = useState<Record<string, CellState>>(() => {
     const init: Record<string, CellState> = {};
