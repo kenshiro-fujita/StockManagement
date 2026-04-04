@@ -104,6 +104,16 @@
   }
 }
 
+/* Next.js ナビゲーションインジケーター（遷移時の進捗バー）の色を上書き */
+/* Next.js 16 は複数のセレクタパターンを使うため、広範にカバーする */
+[data-next-router-progress],
+[data-next-progress],
+#__next-route-announcer ~ div[style*="position: fixed"],
+div[style*="z-index: 99999"] {
+  background: hsl(174 62% 38%) !important;
+  --progress-color: hsl(174 62% 38%) !important;
+}
+
 @theme inline {
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

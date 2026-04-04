@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { saveSetting } from '@/actions/settings';
-import { createClient } from '@/lib/supabase/client';
+import { updateDisplayName, updatePassword, updateEmail } from '@/actions/user-profile';
 
 function ApiKeyField({
   label,
@@ -79,26 +79,19 @@ function ApiKeyField({
 }
 
 function PasswordChangeSection() {
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [isChanging, setIsChanging] = useState(false);
 
   const handleChangePassword = async () => {
-    if (newPassword.length < 8) {
-      toast.error('新しいパスワードは8文字以上にしてください');
-      return;
-    }
     setIsChanging(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    const result = await updatePassword(newPassword);
     setIsChanging(false);
 
-    if (error) {
-      toast.error('パスワードの変更に失敗しました');
-    } else {
+    if (result.success) {
       toast.success('パスワードを変更しました');
-      setCurrentPassword('');
       setNewPassword('');
+    } else {
+      toast.error(result.error ?? 'パスワードの変更に失敗しました');
     }
   };
 
@@ -137,27 +130,23 @@ function UserProfileSection({
 
   const handleSaveName = async () => {
     setIsSavingName(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({
-      data: { display_name: name },
-    });
+    const result = await updateDisplayName(name);
     setIsSavingName(false);
-    if (error) {
-      toast.error('表示名の更新に失敗しました');
-    } else {
+    if (result.success) {
       toast.success('表示名を更新しました');
+    } else {
+      toast.error(result.error ?? '表示名の更新に失敗しました');
     }
   };
 
   const handleSaveEmail = async () => {
     setIsSavingEmail(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.updateUser({ email: newEmail });
+    const result = await updateEmail(newEmail);
     setIsSavingEmail(false);
-    if (error) {
-      toast.error('メールアドレスの変更に失敗しました');
+    if (result.success) {
+      toast.success('メールアドレスを変更しました');
     } else {
-      toast.success('確認メールを送信しました。メール内のリンクをクリックしてください。');
+      toast.error(result.error ?? 'メールアドレスの変更に失敗しました');
     }
   };
 
