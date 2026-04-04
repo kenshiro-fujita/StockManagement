@@ -63,6 +63,14 @@
   }
 }
 
+/* 財務グリッドの入力セル背景 */
+.grid-cell-input {
+  background-color: #bbe2f1 !important;
+}
+.grid-cell-input:focus {
+  background-color: #ffffff !important;
+}
+
 @layer base {
   * {
     @apply border-border;
