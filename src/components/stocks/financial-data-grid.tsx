@@ -308,8 +308,8 @@ export function FinancialDataGrid({
                       inputMode="numeric"
                       value={cells[row.id]?.[gridRow.key] ?? ''}
                       onChange={(e) => handleCellChange(row.id, gridRow.key, e.target.value)}
-                      className={`w-full text-right tabular-nums text-sm h-8 bg-blue-50/60 focus:bg-white dark:bg-blue-950/30 dark:focus:bg-background ${
-                        dirtyIds.has(row.id) ? 'border-amber-400' : 'border-blue-200 dark:border-blue-800'
+                      className={`w-full text-right tabular-nums text-sm h-8 bg-sky-50 focus:bg-white dark:bg-sky-950/20 dark:focus:bg-background ${
+                        dirtyIds.has(row.id) ? 'border-amber-400' : 'border-sky-100 dark:border-sky-900'
                       }`}
                       placeholder="—"
                     />
