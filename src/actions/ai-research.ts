@@ -95,8 +95,20 @@ export async function runAIResearch(
     revalidatePath('/stocks');
     return { success: true, data: result };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI調査に失敗しました';
-    return { success: false, error: message };
+    const raw = error instanceof Error ? error.message : 'AI調査に失敗しました';
+
+    // Anthropic API のエラーをユーザーにわかりやすく翻訳
+    if (raw.includes('credit balance is too low')) {
+      return { success: false, error: 'Anthropic APIのクレジット残高が不足しています。console.anthropic.com の Plans & Billing からクレジットを購入してください。' };
+    }
+    if (raw.includes('invalid_api_key') || raw.includes('401')) {
+      return { success: false, error: 'Anthropic APIキーが無効です。ユーザー設定画面で正しいキーを登録してください。' };
+    }
+    if (raw.includes('rate_limit')) {
+      return { success: false, error: 'Anthropic APIのレート制限に達しました。しばらくしてから再度お試しください。' };
+    }
+
+    return { success: false, error: raw };
   }
 }
 
