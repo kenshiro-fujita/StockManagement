@@ -2,11 +2,15 @@
  * 財務データのスプレッドシート風グリッド入力
  *
  * 横軸=年度、縦軸=財務項目 の表形式で、全期のデータを一覧しながら編集できる。
- * セルからフォーカスが外れたときに自動保存する。
+ * - 年度追加: 任意の年度を指定して追加（過去の年度も可）
+ * - 保存: 年度ごとの保存ボタン（変更セルは amber ハイライト）
+ * - 削除: 年度ごとの削除ボタン（確認ダイアログ付き）
+ * - 列幅: ドラッグでリサイズ可能
  */
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,7 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { updateFinancialData, deleteFinancialData } from '@/actions/financial-data';
+import { addEmptyFinancialYear, updateFinancialData, deleteFinancialData } from '@/actions/financial-data';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 /** 表示する財務項目の定義 */
@@ -51,24 +55,17 @@ const GRID_ROWS = [
 
 type GridRowKey = (typeof GRID_ROWS)[number]['key'];
 
-/** セルの値を百万円単位の文字列に変換する（表示用） */
 function toDisplayValue(value: number | null, key: GridRowKey): string {
   if (value == null) return '';
-  if (key === 'shares_outstanding' || key === 'current_stock_price') {
-    return String(value);
-  }
-  // 百万円単位で表示
+  if (key === 'shares_outstanding' || key === 'current_stock_price') return String(value);
   return String(Math.round(value / 1_000_000));
 }
 
-/** 表示値（百万円）をDB値（円）に変換する */
 function fromDisplayValue(displayValue: string, key: GridRowKey): number | null {
   if (displayValue.trim() === '') return null;
   const num = Number(displayValue.replace(/,/g, ''));
   if (isNaN(num)) return null;
-  if (key === 'shares_outstanding' || key === 'current_stock_price') {
-    return num;
-  }
+  if (key === 'shares_outstanding' || key === 'current_stock_price') return num;
   return num * 1_000_000;
 }
 
@@ -77,12 +74,59 @@ type CellState = Record<GridRowKey, string>;
 function buildCellState(row: FullFinancialDataRow): CellState {
   const state: Partial<CellState> = {};
   for (const r of GRID_ROWS) {
-    state[r.key] = toDisplayValue(
-      row[r.key as keyof FullFinancialDataRow] as number | null,
-      r.key,
-    );
+    state[r.key] = toDisplayValue(row[r.key as keyof FullFinancialDataRow] as number | null, r.key);
   }
   return state as CellState;
+}
+
+/** 列ヘッダーのドラッグリサイズ用フック */
+function useColumnResize(initialWidth: number) {
+  const [width, setWidth] = useState(initialWidth);
+  const startX = useRef(0);
+  const startWidth = useRef(0);
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    startX.current = e.clientX;
+    startWidth.current = width;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const diff = ev.clientX - startX.current;
+      setWidth(Math.max(80, startWidth.current + diff));
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [width]);
+
+  return { width, onMouseDown };
+}
+
+/** リサイズ可能な列ヘッダー */
+function ResizableHead({
+  children,
+  initialWidth = 120,
+  className = '',
+}: {
+  children: React.ReactNode;
+  initialWidth?: number;
+  className?: string;
+}) {
+  const { width, onMouseDown } = useColumnResize(initialWidth);
+
+  return (
+    <TableHead className={`relative ${className}`} style={{ width, minWidth: width }}>
+      {children}
+      <div
+        onMouseDown={onMouseDown}
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/30"
+        aria-hidden="true"
+      />
+    </TableHead>
+  );
 }
 
 export function FinancialDataGrid({
@@ -92,10 +136,9 @@ export function FinancialDataGrid({
   stockId: string;
   financialData: FullFinancialDataRow[];
 }) {
-  // 年度降順でソート
+  const router = useRouter();
   const sorted = [...financialData].sort((a, b) => b.fiscal_year - a.fiscal_year);
 
-  // 各年度のセル値をstate管理（編集中の値を保持）
   const [cells, setCells] = useState<Record<string, CellState>>(() => {
     const init: Record<string, CellState> = {};
     for (const row of sorted) {
@@ -107,8 +150,12 @@ export function FinancialDataGrid({
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
   const [savingId, setSavingId] = useState<string | null>(null);
   const [addingYear, setAddingYear] = useState(false);
+  const [newYear, setNewYear] = useState(() => {
+    if (sorted.length === 0) return new Date().getFullYear();
+    // 既存年度の最小値 - 1（過去を追加しやすく）か最大値 + 1
+    return sorted[0].fiscal_year + 1;
+  });
 
-  /** セル値の変更 */
   const handleCellChange = useCallback((rowId: string, key: GridRowKey, value: string) => {
     setCells((prev) => ({
       ...prev,
@@ -117,7 +164,6 @@ export function FinancialDataGrid({
     setDirtyIds((prev) => new Set([...prev, rowId]));
   }, []);
 
-  /** 1期分を保存 */
   const handleSave = useCallback(async (row: FullFinancialDataRow) => {
     const cellState = cells[row.id];
     if (!cellState) return;
@@ -129,16 +175,13 @@ export function FinancialDataGrid({
       fiscal_year: row.fiscal_year,
       fiscal_quarter: row.fiscal_quarter,
       consolidation_type: row.consolidation_type,
-      input_unit: 'million',
+      input_unit: 'yen',
     };
 
     for (const r of GRID_ROWS) {
       const dbValue = fromDisplayValue(cellState[r.key], r.key);
-      // input_unit=million の場合、Server Action 側で百万円→円変換するが、
-      // ここでは既に円に変換済みの値を input_unit=yen で渡す
       data[r.key] = dbValue != null ? String(dbValue) : '';
     }
-    data['input_unit'] = 'yen';
 
     const result = await updateFinancialData(row.id, data as Parameters<typeof updateFinancialData>[1]);
     setSavingId(null);
@@ -155,45 +198,28 @@ export function FinancialDataGrid({
     }
   }, [cells, stockId]);
 
-  /** 新しい年度を追加 */
   const handleAddYear = useCallback(async () => {
-    const latestYear = sorted.length > 0 ? sorted[0].fiscal_year + 1 : new Date().getFullYear();
     setAddingYear(true);
-
-    // Server Action に直接 DB 値を渡す（Zod スキーマの文字列→数値変換を経由しない）
-    const supabaseModule = await import('@/lib/supabase/client');
-    const supabase = supabaseModule.createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      setAddingYear(false);
-      toast.error('認証が必要です');
-      return;
-    }
-
-    const { error } = await supabase.from('financial_data').insert({
-      user_id: user.id,
-      stock_id: stockId,
-      fiscal_year: latestYear,
-      fiscal_quarter: 'FY',
-      consolidation_type: 'consolidated',
-      revenue: 0,
-      operating_income: 0,
-      net_income: 0,
-      total_assets: 0,
-      equity: 0,
-      input_unit: 'yen',
-    });
-
-    const result = { success: !error, error: error?.message };
+    const result = await addEmptyFinancialYear(stockId, newYear);
     setAddingYear(false);
 
     if (result.success) {
-      toast.success(`${latestYear}年度を追加しました`);
+      toast.success(`${newYear}年度を追加しました`);
+      router.refresh();
     } else {
       toast.error(result.error ?? '追加に失敗しました');
     }
-  }, [sorted, stockId]);
+  }, [stockId, newYear, router]);
+
+  const handleDelete = useCallback(async (row: FullFinancialDataRow) => {
+    const result = await deleteFinancialData(row.id);
+    if (result.success) {
+      toast.success(`${row.fiscal_year}年度を削除しました`);
+      router.refresh();
+    } else {
+      toast.error(result.error ?? '削除に失敗しました');
+    }
+  }, [router]);
 
   if (sorted.length === 0) {
     return (
@@ -202,10 +228,20 @@ export function FinancialDataGrid({
           <p className="text-muted-foreground mb-4">
             財務データがまだ登録されていません
           </p>
-          <Button onClick={handleAddYear} disabled={addingYear}>
-            <Plus className="mr-2 h-4 w-4" />
-            {addingYear ? '追加中...' : '最初の年度を追加する'}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              value={newYear}
+              onChange={(e) => setNewYear(Number(e.target.value))}
+              className="w-24"
+              aria-label="追加する年度"
+            />
+            <span className="text-sm text-muted-foreground">年度</span>
+            <Button onClick={handleAddYear} disabled={addingYear}>
+              <Plus className="mr-2 h-4 w-4" />
+              {addingYear ? '追加中...' : '年度を追加する'}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -213,30 +249,42 @@ export function FinancialDataGrid({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-muted-foreground">
-          金額は百万円単位で入力してください（株式数・株価を除く）
+          金額は百万円単位（株式数・株価を除く）。列の境界をドラッグで幅調整できます。
         </p>
-        <Button onClick={handleAddYear} disabled={addingYear} size="sm" variant="outline">
-          <Plus className="mr-2 h-4 w-4" />
-          {addingYear ? '追加中...' : '年度を追加'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            value={newYear}
+            onChange={(e) => setNewYear(Number(e.target.value))}
+            className="w-24 h-8"
+            aria-label="追加する年度"
+          />
+          <span className="text-sm text-muted-foreground">年度</span>
+          <Button onClick={handleAddYear} disabled={addingYear} size="sm" variant="outline">
+            <Plus className="mr-2 h-4 w-4" />
+            {addingYear ? '追加中...' : '追加'}
+          </Button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-background min-w-[140px]">項目</TableHead>
+              <TableHead className="sticky left-0 z-10 bg-background" style={{ minWidth: 160 }}>
+                項目
+              </TableHead>
               {sorted.map((row) => (
-                <TableHead key={row.id} className="text-center min-w-[120px]">
-                  <div className="flex flex-col items-center gap-1">
+                <ResizableHead key={row.id} initialWidth={120}>
+                  <div className="flex flex-col items-center gap-0.5">
                     <span className="font-semibold">{row.fiscal_year}</span>
                     <span className="text-xs font-normal text-muted-foreground">
                       {row.fiscal_quarter === 'FY' ? '通期' : row.fiscal_quarter}
                     </span>
                   </div>
-                </TableHead>
+                </ResizableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -294,24 +342,11 @@ export function FinancialDataGrid({
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>{row.fiscal_year}年度のデータを削除しますか？</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            この操作は取り消せません。
-                          </AlertDialogDescription>
+                          <AlertDialogDescription>この操作は取り消せません。</AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={async () => {
-                              const result = await deleteFinancialData(row.id);
-                              if (result.success) {
-                                toast.success(`${row.fiscal_year}年度を削除しました`);
-                              } else {
-                                toast.error(result.error ?? '削除に失敗しました');
-                              }
-                            }}
-                          >
-                            削除する
-                          </AlertDialogAction>
+                          <AlertDialogAction onClick={() => handleDelete(row)}>削除する</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>

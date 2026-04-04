@@ -126,6 +126,56 @@ export async function updateFinancialData(
   return { success: true };
 }
 
+/** 空の財務データ行を新規追加する（グリッドで年度追加用） */
+export async function addEmptyFinancialYear(
+  stockId: string,
+  fiscalYear: number,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  // 重複チェック
+  const { data: existing } = await supabase
+    .from('financial_data')
+    .select('id')
+    .eq('stock_id', stockId)
+    .eq('fiscal_year', fiscalYear)
+    .eq('fiscal_quarter', 'FY')
+    .eq('consolidation_type', 'consolidated')
+    .maybeSingle();
+
+  if (existing) {
+    return { success: false, error: `${fiscalYear}年度のデータは既に存在します` };
+  }
+
+  const { error } = await supabase.from('financial_data').insert({
+    user_id: user.id,
+    stock_id: stockId,
+    fiscal_year: fiscalYear,
+    fiscal_quarter: 'FY',
+    consolidation_type: 'consolidated',
+    revenue: 0,
+    operating_income: 0,
+    net_income: 0,
+    total_assets: 0,
+    equity: 0,
+    input_unit: 'yen',
+  });
+
+  if (error) {
+    return { success: false, error: '年度の追加に失敗しました' };
+  }
+
+  revalidatePath('/stocks');
+  return { success: true };
+}
+
 /** 財務データを削除する */
 export async function deleteFinancialData(
   id: string,
