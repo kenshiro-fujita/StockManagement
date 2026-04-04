@@ -91,9 +91,11 @@ export function EdinetSearch({
     <div className="space-y-4">
       <h3 className="text-base font-semibold">EDINET 有価証券報告書検索</h3>
 
-      <p className="text-xs text-muted-foreground">
-        有価証券報告書は決算日の約3ヶ月後に提出されます（3月決算なら6月頃）。提出日の前後で検索してください。
-      </p>
+      <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800 space-y-1">
+        <p className="font-medium">検索のコツ</p>
+        <p>有価証券報告書は決算日の<strong>約3ヶ月後</strong>にEDINETに提出されます（決算発表日とは異なります）。</p>
+        <p>例: 3月決算 → <strong>6月下旬</strong>頃に提出 / 12月決算 → <strong>3月下旬</strong>頃に提出</p>
+      </div>
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
