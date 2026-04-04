@@ -86,5 +86,7 @@ development_status:
   5-5-mapping-log-and-alerts: done
   epic-5-retrospective: optional
 
-  epic-8: backlog
+  epic-8: done
+  8-1-business-overview: done
+  8-2-ai-research-with-provider-abstraction: done
   epic-8-retrospective: optional

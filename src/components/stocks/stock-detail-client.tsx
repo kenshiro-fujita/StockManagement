@@ -22,6 +22,7 @@ import { TheoryPriceSection } from '@/components/stocks/theory-price-section';
 import { FinancialDataSection } from '@/components/stocks/financial-data-section';
 import { ParameterSection } from '@/components/stocks/parameter-section';
 import { EdinetSearch } from '@/components/stocks/edinet-search';
+import { AIResearchSection } from '@/components/stocks/ai-research-section';
 
 export function StockDetailClient({
   stockId,
@@ -83,6 +84,9 @@ export function StockDetailClient({
       }
       edinetContent={
         <EdinetSearch stockId={stockId} stockCode={stockCode} />
+      }
+      aiResearchContent={
+        <AIResearchSection stockId={stockId} />
       }
     />
   );

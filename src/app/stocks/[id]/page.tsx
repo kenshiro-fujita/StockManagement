@@ -23,7 +23,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const [{ data: stock }, { data: financialData }, { data: parametersData }] = await Promise.all([
     supabase
       .from('stocks')
-      .select('id, stock_code, company_name, market, sector, business_segment, roster_category, rating, buy_priority')
+      .select('id, stock_code, company_name, market, sector, business_segment, business_description, roster_category, rating, buy_priority')
       .eq('id', id)
       .single(),
     supabase
@@ -83,6 +83,14 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
         <dt className="font-medium text-muted-foreground">事業セグメント</dt>
         <dd>{stock.business_segment ?? '—'}</dd>
       </dl>
+      {(stock.business_description as string | null) && (
+        <div>
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">事業概要</h3>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+            {stock.business_description as string}
+          </p>
+        </div>
+      )}
       <RosterSection
         stockId={stock.id}
         currentCategory={(stock.roster_category as RosterCategory | null) ?? null}

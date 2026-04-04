@@ -14,6 +14,7 @@ export function StockDetailTabs({
   financialContent,
   parametersContent,
   edinetContent,
+  aiResearchContent,
   defaultTab = 'overview',
 }: {
   overviewContent: ReactNode;
@@ -21,6 +22,7 @@ export function StockDetailTabs({
   financialContent: ReactNode;
   parametersContent: ReactNode;
   edinetContent?: ReactNode;
+  aiResearchContent?: ReactNode;
   defaultTab?: string;
 }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
@@ -33,6 +35,7 @@ export function StockDetailTabs({
         <TabsTrigger value="financial">財務データ</TabsTrigger>
         <TabsTrigger value="parameters">パラメータ</TabsTrigger>
         {edinetContent && <TabsTrigger value="edinet">EDINET</TabsTrigger>}
+        {aiResearchContent && <TabsTrigger value="ai-research">AI調査</TabsTrigger>}
       </TabsList>
       <TabsContent value="overview" className="mt-4">
         {overviewContent}
@@ -49,6 +52,11 @@ export function StockDetailTabs({
       {edinetContent && (
         <TabsContent value="edinet" className="mt-4">
           {edinetContent}
+        </TabsContent>
+      )}
+      {aiResearchContent && (
+        <TabsContent value="ai-research" className="mt-4">
+          {aiResearchContent}
         </TabsContent>
       )}
     </Tabs>
