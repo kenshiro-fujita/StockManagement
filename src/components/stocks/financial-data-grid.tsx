@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { addEmptyFinancialYear, updateFinancialData, deleteFinancialData } from '@/actions/financial-data';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
+import type { ParametersRow } from '@/lib/types/parameters';
+import { GRID_INDICATORS, type GridValues } from '@/lib/calc/grid-indicators';
 
 /** 表示する財務項目の定義 */
 const GRID_ROWS = [
@@ -156,9 +158,11 @@ function ResizableHead({
 export function FinancialDataGrid({
   stockId,
   financialData,
+  parameters,
 }: {
   stockId: string;
   financialData: FullFinancialDataRow[];
+  parameters: ParametersRow | null;
 }) {
   const router = useRouter();
   // 古い年度が左、新しい年度が右（昇順）
@@ -340,41 +344,55 @@ export function FinancialDataGrid({
               </TableRow>
             ))}
 
-            {/* 計算行: FCF */}
-            <TableRow className="bg-muted/30">
-              <TableCell className="sticky left-0 z-10 bg-muted/30 text-sm font-medium">
-                FCF <span className="text-xs text-muted-foreground ml-1">(百万円)</span>
+            {/* 計算指標セクション */}
+            <TableRow>
+              <TableCell
+                colSpan={sorted.length + 1}
+                className="sticky left-0 z-10 bg-muted/50 font-semibold text-sm border-l-4 border-l-purple-500 pl-3"
+              >
+                計算指標（自動算出）
               </TableCell>
-              {sorted.map((row) => {
-                const opCf = fromDisplayValue(cells[row.id]?.operating_cf ?? '', 'operating_cf');
-                const invCf = fromDisplayValue(cells[row.id]?.investing_cf ?? '', 'investing_cf');
-                const fcf = opCf != null && invCf != null ? Math.round((opCf + invCf) / 1_000_000) : null;
-                return (
-                  <TableCell key={row.id} className="text-right tabular-nums text-sm p-2">
-                    {fcf != null ? fcf.toLocaleString() : '—'}
-                  </TableCell>
-                );
-              })}
             </TableRow>
+            {GRID_INDICATORS.map((indicator) => (
+              <TableRow key={indicator.key} className="bg-muted/20">
+                <TableCell className="sticky left-0 z-10 bg-muted/20 text-sm font-medium">
+                  {indicator.label}
+                  {indicator.unit && (
+                    <span className="text-xs text-muted-foreground ml-1">({indicator.unit})</span>
+                  )}
+                </TableCell>
+                {sorted.map((row, colIdx) => {
+                  /** 現在のセル値を GridValues に変換 */
+                  const toGridValues = (id: string): GridValues => ({
+                    revenue: fromDisplayValue(cells[id]?.revenue ?? '', 'revenue'),
+                    operating_income: fromDisplayValue(cells[id]?.operating_income ?? '', 'operating_income'),
+                    net_income: fromDisplayValue(cells[id]?.net_income ?? '', 'net_income'),
+                    total_assets: fromDisplayValue(cells[id]?.total_assets ?? '', 'total_assets'),
+                    equity: fromDisplayValue(cells[id]?.equity ?? '', 'equity'),
+                    interest_bearing_debt: fromDisplayValue(cells[id]?.interest_bearing_debt ?? '', 'interest_bearing_debt'),
+                    operating_cf: fromDisplayValue(cells[id]?.operating_cf ?? '', 'operating_cf'),
+                    investing_cf: fromDisplayValue(cells[id]?.investing_cf ?? '', 'investing_cf'),
+                    shares_outstanding: fromDisplayValue(cells[id]?.shares_outstanding ?? '', 'shares_outstanding'),
+                    interest_expense: fromDisplayValue(cells[id]?.interest_expense ?? '', 'interest_expense'),
+                    current_stock_price: fromDisplayValue(cells[id]?.current_stock_price ?? '', 'current_stock_price'),
+                    shareholders_equity: fromDisplayValue(cells[id]?.shareholders_equity ?? '', 'shareholders_equity'),
+                  });
 
-            {/* 計算行: 負債調達コスト */}
-            <TableRow className="bg-muted/30">
-              <TableCell className="sticky left-0 z-10 bg-muted/30 text-sm font-medium">
-                負債調達コスト <span className="text-xs text-muted-foreground ml-1">(%)</span>
-              </TableCell>
-              {sorted.map((row) => {
-                const intExp = fromDisplayValue(cells[row.id]?.interest_expense ?? '', 'interest_expense');
-                const debt = fromDisplayValue(cells[row.id]?.interest_bearing_debt ?? '', 'interest_bearing_debt');
-                const costOfDebt = intExp != null && debt != null && debt !== 0
-                  ? ((intExp / debt) * 100).toFixed(2)
-                  : null;
-                return (
-                  <TableCell key={row.id} className="text-right tabular-nums text-sm p-2">
-                    {costOfDebt != null ? `${costOfDebt}%` : '—'}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
+                  const currentValues = toGridValues(row.id);
+                  /** 前年度のデータ（成長率計算用） */
+                  const prevRow = colIdx > 0 ? sorted[colIdx - 1] : null;
+                  const prevValues = prevRow ? toGridValues(prevRow.id) : null;
+
+                  const result = indicator.calc(currentValues, parameters, prevValues);
+
+                  return (
+                    <TableCell key={row.id} className="text-right tabular-nums text-sm p-2">
+                      {result ?? '—'}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
 
             {/* 操作行 */}
             <TableRow>

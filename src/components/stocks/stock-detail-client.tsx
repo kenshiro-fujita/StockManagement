@@ -73,6 +73,7 @@ export function StockDetailClient({
         <FinancialDataSection
           stockId={stockId}
           financialData={financialData}
+          parameters={parameters}
         />
       }
       parametersContent={
