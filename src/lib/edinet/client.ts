@@ -93,6 +93,7 @@ async function fetchWithRetry(
   throw new Error('EDINET APIへの接続に失敗しました');
 }
 
+/** 指定ミリ秒だけ待機する（レート制限の間隔調整に使用） */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

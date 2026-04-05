@@ -1,3 +1,14 @@
+/**
+ * 財務データの CRUD Server Actions
+ *
+ * - createFinancialData: 新規登録（Zod バリデーション → 単位変換 → DB insert）
+ * - updateFinancialData: 更新（同上 → DB update）
+ * - deleteFinancialData: 削除
+ * - addEmptyFinancialYear: グリッドからの空行追加（Zod を経由しない直接 insert）
+ *
+ * 金額フィールドはユーザーが選択した入力単位（百万円等）で入力され、
+ * 保存時に円に変換してDBに格納する。
+ */
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
@@ -8,7 +19,7 @@ import {
 } from '@/lib/schemas/financial-data';
 import { toYen, type InputUnit } from '@/lib/utils/unit-conversion';
 
-// Fields subject to unit conversion (all amount fields except shares/price)
+/** 単位変換の対象となる金額フィールド（株数・株価は対象外） */
 const CONVERT_FIELDS = [
   'revenue',
   'operating_income',
@@ -21,7 +32,10 @@ const CONVERT_FIELDS = [
   'interest_expense',
 ] as const;
 
-/** Shared parse + convert + auth logic for create and update */
+/**
+ * create/update 共通の前処理: Zod バリデーション → 認証チェック → 単位変換
+ * 成功時は supabase クライアント、ユーザー、変換済み行データを返す
+ */
 async function parseAndConvert(data: CreateFinancialDataInput) {
   const parsed = createFinancialDataSchema.safeParse(data);
   if (!parsed.success) {

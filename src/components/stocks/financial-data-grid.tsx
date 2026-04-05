@@ -68,17 +68,19 @@ const GRID_ROWS = [
 
 type GridRowKey = (typeof GRID_ROWS)[number]['key'];
 
-/** 単位変換不要なフィールド（株数、円、倍率はそのまま表示） */
+/** 百万円変換不要なフィールド（株数は株、株価は円、β値は倍率でそのまま表示） */
 const NO_MILLION_CONVERSION = new Set<string>([
   'shares_outstanding', 'current_stock_price', 'beta',
 ]);
 
+/** DB値（円）をグリッド表示値（百万円）に変換する。株数・株価・β値はそのまま */
 function toDisplayValue(value: number | null, key: GridRowKey): string {
   if (value == null) return '';
   if (NO_MILLION_CONVERSION.has(key)) return String(value);
   return String(Math.round(value / 1_000_000));
 }
 
+/** グリッド表示値（百万円）をDB値（円）に変換する。株数・株価・β値はそのまま */
 function fromDisplayValue(displayValue: string, key: GridRowKey): number | null {
   if (displayValue.trim() === '') return null;
   const num = Number(displayValue.replace(/,/g, ''));
@@ -87,8 +89,10 @@ function fromDisplayValue(displayValue: string, key: GridRowKey): number | null 
   return num * 1_000_000;
 }
 
+/** グリッドの1列（1年度）分の全セル値（文字列で保持、Input との双方向バインド用） */
 type CellState = Record<GridRowKey, string>;
 
+/** FullFinancialDataRow の DB 値をグリッド表示用の文字列に変換する */
 function buildCellState(row: FullFinancialDataRow): CellState {
   const state: Partial<CellState> = {};
   for (const r of GRID_ROWS) {

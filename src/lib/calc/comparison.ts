@@ -73,6 +73,7 @@ export const COMPARISON_CATEGORIES: {
   },
 ];
 
+/** IndicatorResults から指標フィールド名で値を取得する（movingAverageROIC は特別扱い） */
 function getFieldValue(results: IndicatorResults, field: string): number | null {
   if (field === 'movingAverageROIC') return results.movingAverageROIC.value;
   const period = results.period as Record<string, { value: number | null }>;

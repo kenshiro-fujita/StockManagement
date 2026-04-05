@@ -213,78 +213,89 @@ export function normalizeNumber(raw: string): number | null {
  *   total_assets, equity → Instant（時点残高）で検索
  *   それ以外 → Duration/Current（期間累計）で検索
  */
-function extractMetric(
+/** 連結/単体を問わないメトリック（企業全体で1つの値しかない） */
+const CONSOLIDATION_AGNOSTIC_METRICS: MetricKey[] = ['issued_shares', 'eps_basic'];
+
+/** B/S（貸借対照表）項目: Instant（時点）コンテキストで検索する */
+const BS_METRICS: MetricKey[] = [
+  'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
+  'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
+  'shareholders_equity',
+];
+
+/**
+ * 合算メトリックの抽出（有利子負債など）
+ * 候補タグの値を全て見つけて合計する
+ */
+function extractAggregateMetric(
   facts: CsvFact[],
   metricKey: MetricKey,
-  standard: AccountingStandard,
+  candidates: string[],
 ): ExtractionResult {
-  const candidates = METRIC_TAGS[metricKey][standard] ?? METRIC_TAGS[metricKey].JGAAP ?? [];
-  const isAggregate = AGGREGATE_METRICS.includes(metricKey);
-
-  if (isAggregate) {
-    // 合算メトリック: 候補タグの値を全て足し合わせる
-    let total = 0;
-    let found = false;
-    const matchedTags: string[] = [];
-
-    for (const tag of candidates) {
-      const fact = facts.find(
-        (f) => f.localName === tag && isConsolidatedInstant(f.contextId),
-      );
-      if (fact) {
-        const num = normalizeNumber(fact.value);
-        if (num != null) {
-          total += num;
-          found = true;
-          matchedTags.push(tag);
-        }
-      }
-    }
-
-    return {
-      metricKey,
-      label: METRIC_LABELS[metricKey],
-      value: found ? total : null,
-      matchedTag: matchedTags.length > 0 ? matchedTags.join('+') : null,
-      contextId: null,
-      confidence: found ? 'medium' : 'low',
-    };
-  }
-
-  // 通常メトリック: 優先順に検索、最初にヒットした値を採用
-  // 発行済株式数とEPSは連結/単体を問わない（企業全体の値なので）
-  const anyConsolidation: MetricKey[] = ['issued_shares', 'eps_basic'];
-  const isAnyConsol = anyConsolidation.includes(metricKey);
+  let total = 0;
+  let found = false;
+  const matchedTags: string[] = [];
 
   for (const tag of candidates) {
-    // B/S項目（資産・負債）は Instant、P/L・CF項目は Duration
-    const bsMetrics: MetricKey[] = [
-      'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
-      'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
-      'shareholders_equity',
-    ];
-    const isBs = bsMetrics.includes(metricKey);
-
-    const matchingFacts = facts.filter((f) => {
-      if (f.localName !== tag) return false;
-      if (!f.contextId.includes('CurrentYear')) return false;
-
-      if (isAnyConsol) {
-        // 発行済株式数/EPS: CurrentYear を含めば連結/単体問わずOK
-        // ただし Member サフィックス付き（株主別明細等）は除外
-        const hasMember = f.contextId.includes('Member');
-        const isPlainInstant = f.contextId === 'CurrentYearInstant' ||
-          f.contextId === 'CurrentYearInstant_NonConsolidatedMember' ||
-          f.contextId === 'CurrentYearDuration' ||
-          f.contextId === 'CurrentYearDuration_NonConsolidatedMember';
-        return isPlainInstant || !hasMember;
+    const fact = facts.find(
+      (f) => f.localName === tag && isConsolidatedInstant(f.contextId),
+    );
+    if (fact) {
+      const num = normalizeNumber(fact.value);
+      if (num != null) {
+        total += num;
+        found = true;
+        matchedTags.push(tag);
       }
+    }
+  }
 
-      // 通常: 連結のみ（NonConsolidatedMember を除外）
-      if (f.contextId.includes('NonConsolidatedMember')) return false;
-      if (isBs) return f.contextId.includes('Instant');
-      return true;
-    });
+  return {
+    metricKey,
+    label: METRIC_LABELS[metricKey],
+    value: found ? total : null,
+    matchedTag: matchedTags.length > 0 ? matchedTags.join('+') : null,
+    contextId: null,
+    confidence: found ? 'medium' : 'low',
+  };
+}
+
+/**
+ * コンテキストIDが指定メトリックの検索条件に合致するかを判定する
+ *
+ * - 連結/単体を問わないメトリック: CurrentYear を含めばOK（Member サフィックス付きは除外）
+ * - B/S 項目: 連結 + Instant
+ * - P/L・CF 項目: 連結 + Duration/Current
+ */
+function matchesContext(contextId: string, metricKey: MetricKey): boolean {
+  if (!contextId.includes('CurrentYear')) return false;
+
+  if (CONSOLIDATION_AGNOSTIC_METRICS.includes(metricKey)) {
+    const isPlainContext = contextId === 'CurrentYearInstant' ||
+      contextId === 'CurrentYearInstant_NonConsolidatedMember' ||
+      contextId === 'CurrentYearDuration' ||
+      contextId === 'CurrentYearDuration_NonConsolidatedMember';
+    return isPlainContext || !contextId.includes('Member');
+  }
+
+  if (contextId.includes('NonConsolidatedMember')) return false;
+  if (BS_METRICS.includes(metricKey)) return contextId.includes('Instant');
+  return true;
+}
+
+/**
+ * 通常メトリックの抽出（優先順位付きフォールバック検索）
+ * 候補タグを先頭から順に検索し、最初にヒットした値を採用する
+ */
+function extractSimpleMetric(
+  facts: CsvFact[],
+  metricKey: MetricKey,
+  candidates: string[],
+): ExtractionResult {
+  for (const tag of candidates) {
+    const matchingFacts = facts.filter(
+      (f) => f.localName === tag && matchesContext(f.contextId, metricKey),
+    );
 
     if (matchingFacts.length > 0) {
       const fact = matchingFacts[0];
@@ -308,6 +319,22 @@ function extractMetric(
     contextId: null,
     confidence: 'low',
   };
+}
+
+/**
+ * メトリック抽出のディスパッチャー: 合算 or 通常を判定して適切な関数に委譲する
+ */
+function extractMetric(
+  facts: CsvFact[],
+  metricKey: MetricKey,
+  standard: AccountingStandard,
+): ExtractionResult {
+  const candidates = METRIC_TAGS[metricKey][standard] ?? METRIC_TAGS[metricKey].JGAAP ?? [];
+
+  if (AGGREGATE_METRICS.includes(metricKey)) {
+    return extractAggregateMetric(facts, metricKey, candidates);
+  }
+  return extractSimpleMetric(facts, metricKey, candidates);
 }
 
 /**
