@@ -145,6 +145,7 @@ function ComparisonSummary({
   theoryPrice,
   growthTheoryPrice,
   safetyRateCurrent,
+  safetyRateGrowth,
   changedFields,
   expandedField,
   onToggle,
@@ -153,6 +154,7 @@ function ComparisonSummary({
   theoryPrice: CalcResult<number>;
   growthTheoryPrice: CalcResult<number>;
   safetyRateCurrent: CalcResult<number>;
+  safetyRateGrowth: CalcResult<number>;
   changedFields: Set<string>;
   expandedField: string | null;
   onToggle: (field: string) => void;
@@ -165,12 +167,8 @@ function ComparisonSummary({
       <h3 id="comparison-heading" className="mb-4 text-lg font-semibold">
         理論株価と市場価格の比較
       </h3>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          label="現在株価"
-          value={hasPrice ? formatStockPrice(currentStockPrice) : NULL_DISPLAY}
-          muted={!hasPrice}
-        />
+      {/* メインの理論株価を大きく表示 */}
+      <div className="grid gap-4 sm:grid-cols-2">
         <SummaryCard
           label="現状理論株価"
           value={formatStockPrice(theoryPrice.value)}
@@ -179,6 +177,27 @@ function ComparisonSummary({
           highlighted={changedFields.has('theoryPrice')}
           expandedField={expandedField}
           onToggle={onToggle}
+          large
+        />
+        <SummaryCard
+          label="安全率（現状）"
+          value={formatPercent(safetyRateCurrent.value)}
+          field="safetyRateCurrent"
+          metadata={safetyRateCurrent.metadata}
+          badge={level ? <ValuationBadge level={level} /> : undefined}
+          highlighted={changedFields.has('safetyRateCurrent')}
+          expandedField={expandedField}
+          onToggle={onToggle}
+          large
+        />
+      </div>
+
+      {/* サブ指標 */}
+      <div className="grid gap-3 sm:grid-cols-3 mt-3">
+        <SummaryCard
+          label="現在株価"
+          value={hasPrice ? formatStockPrice(currentStockPrice) : NULL_DISPLAY}
+          muted={!hasPrice}
         />
         <SummaryCard
           label="成長込理論株価"
@@ -190,12 +209,11 @@ function ComparisonSummary({
           onToggle={onToggle}
         />
         <SummaryCard
-          label="安全率（現状）"
-          value={formatPercent(safetyRateCurrent.value)}
-          field="safetyRateCurrent"
-          metadata={safetyRateCurrent.metadata}
-          badge={level ? <ValuationBadge level={level} /> : undefined}
-          highlighted={changedFields.has('safetyRateCurrent')}
+          label="安全率（成長込）"
+          value={formatPercent(safetyRateGrowth.value)}
+          field="safetyRateGrowth"
+          metadata={safetyRateGrowth.metadata}
+          highlighted={changedFields.has('safetyRateGrowth')}
           expandedField={expandedField}
           onToggle={onToggle}
         />
@@ -209,6 +227,7 @@ function ComparisonSummary({
   );
 }
 
+/** サマリーカード: large=true で理論株価・安全率を大きく強調表示する */
 function SummaryCard({
   label,
   value,
@@ -219,6 +238,7 @@ function SummaryCard({
   highlighted,
   expandedField,
   onToggle,
+  large,
 }: {
   label: string;
   value: string;
@@ -229,20 +249,25 @@ function SummaryCard({
   highlighted?: boolean;
   expandedField?: string | null;
   onToggle?: (field: string) => void;
+  large?: boolean;
 }) {
   const isExpanded = field != null && expandedField === field;
   const isClickable = field != null && metadata != null && onToggle != null;
 
+  /** large: メイン指標を大きく目立たせる */
+  const valueSize = large ? 'text-3xl' : 'text-xl';
+  const padding = large ? 'p-6' : 'p-4';
+
   return (
     <div
-      className={`rounded-lg border p-4 transition-colors ${muted ? 'opacity-60' : ''} ${highlighted ? 'animate-highlight' : ''}`}
+      className={`rounded-lg border ${padding} transition-colors ${muted ? 'opacity-60' : ''} ${highlighted ? 'animate-highlight' : ''}`}
       {...(field ? { 'data-indicator': field } : {})}
     >
-      <p className="text-muted-foreground text-sm">{label}</p>
+      <p className={`text-muted-foreground ${large ? 'text-base font-medium' : 'text-sm'}`}>{label}</p>
       {isClickable ? (
         <button
           type="button"
-          className="mt-1 text-xl font-bold tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 inline-flex items-center gap-1"
+          className={`mt-1 ${valueSize} font-bold tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 inline-flex items-center gap-1`}
           onClick={() => onToggle(field)}
           aria-expanded={isExpanded}
           aria-label={`${label} ${value} — クリックして計算ロジックを${isExpanded ? '閉じる' : '開く'}`}
@@ -254,7 +279,7 @@ function SummaryCard({
           }
         </button>
       ) : (
-        <p className="mt-1 text-xl font-bold tabular-nums" aria-label={`${label} ${value}`}>
+        <p className={`mt-1 ${valueSize} font-bold tabular-nums`} aria-label={`${label} ${value}`}>
           {value}
         </p>
       )}
@@ -380,6 +405,8 @@ type IndicatorDef = {
 type CategoryDef = {
   title: string;
   id: string;
+  /** カテゴリごとの左ボーダー色（視覚的にセクションを区別する） */
+  color: string;
   indicators: IndicatorDef[];
 };
 
@@ -387,6 +414,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '収益性',
     id: 'profitability',
+    color: 'border-l-teal-500',
     indicators: [
       { field: 'equityRatio', label: '自己資本比率', format: formatPercentUnsigned },
       { field: 'netProfitMargin', label: '純利益率', format: formatPercentUnsigned },
@@ -396,6 +424,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '成長性',
     id: 'growth',
+    color: 'border-l-green-500',
     indicators: [
       { field: 'revenueGrowthRate', label: '売上高前年比成長率', format: formatPercent },
       { field: 'netIncomeGrowthRate', label: '純利益前年比成長率', format: formatPercent },
@@ -404,6 +433,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: 'キャッシュフロー',
     id: 'cashflow',
+    color: 'border-l-blue-500',
     indicators: [
       { field: 'operatingCF', label: '営業CF', format: formatCurrency },
       { field: 'investingCF', label: '投資CF', format: formatCurrency },
@@ -413,6 +443,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '資本効率',
     id: 'efficiency',
+    color: 'border-l-purple-500',
     indicators: [
       { field: 'roe', label: 'ROE', format: formatPercentUnsigned },
       { field: 'roa', label: 'ROA', format: formatPercentUnsigned },
@@ -423,6 +454,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '株式指標',
     id: 'stock-metrics',
+    color: 'border-l-amber-500',
     indicators: [
       { field: 'eps', label: 'EPS', format: formatPerShare },
       { field: 'per', label: 'PER', format: formatMultiple },
@@ -432,6 +464,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '理論価値',
     id: 'theory-value',
+    color: 'border-l-rose-500',
     indicators: [
       { field: 'businessValue', label: '事業価値', format: formatCurrency },
       { field: 'assetValue', label: '資産価値', format: formatCurrency },
@@ -442,6 +475,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '理論PER系',
     id: 'theory-per',
+    color: 'border-l-orange-500',
     indicators: [
       { field: 'theoryMarketCap', label: '理論時価総額', format: formatCurrency },
       { field: 'theoryPER', label: '理論PER', format: formatMultiple },
@@ -452,6 +486,7 @@ const CATEGORIES: CategoryDef[] = [
   {
     title: '安全性',
     id: 'safety',
+    color: 'border-l-emerald-500',
     indicators: [
       { field: 'safetyMarginCurrent', label: '安全域（現状）', format: formatCurrency },
       { field: 'safetyMarginGrowth', label: '安全域（成長込）', format: formatCurrency },
@@ -478,7 +513,7 @@ function IndicatorSection({
 }) {
   return (
     <section aria-labelledby={`${category.id}-heading`}>
-      <h3 id={`${category.id}-heading`} className="mb-3 text-base font-semibold">
+      <h3 id={`${category.id}-heading`} className={`mb-3 text-base font-semibold border-l-4 pl-3 ${category.color}`}>
         {category.title}
       </h3>
       <dl className="divide-y rounded-lg border">
@@ -568,6 +603,7 @@ export function TheoryPriceSection({
         theoryPrice={results.period.theoryPrice}
         growthTheoryPrice={results.period.growthTheoryPrice}
         safetyRateCurrent={results.period.safetyRateCurrent}
+        safetyRateGrowth={results.period.safetyRateGrowth}
         changedFields={highlighted}
         expandedField={expandedField}
         onToggle={handleToggle}

@@ -26,21 +26,30 @@ export async function createStock(
     return { success: false, error: '認証が必要です' };
   }
 
-  const { error } = await supabase.from('stocks').insert({
+  const { data: newStock, error } = await supabase.from('stocks').insert({
     user_id: user.id,
     stock_code: parsed.data.stock_code,
     company_name: parsed.data.company_name,
     market: parsed.data.market || null,
     sector: parsed.data.sector || null,
     business_segment: parsed.data.business_segment || null,
-  });
+  }).select('id').single();
 
   if (error?.code === '23505') {
     return { success: false, error: 'この銘柄コードは既に登録されています' };
   }
-  if (error) {
+  if (error || !newStock) {
     return { success: false, error: '銘柄の登録に失敗しました' };
   }
+
+  // パラメータをデフォルト値で自動作成（ユーザーは後から変更可能）
+  await supabase.from('parameters').insert({
+    stock_id: newStock.id,
+    discount_rate: 0.08,    // 割引率 8%
+    growth_rate: 0.02,      // 永久成長率 2%
+    tax_rate: 0.30,         // 実効税率 30%（日本の法定実効税率の近似値）
+    cap_multiplier: 20,     // 上限倍率 20倍
+  });
 
   revalidatePath('/stocks');
   return { success: true };
