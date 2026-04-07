@@ -69,28 +69,24 @@ function extractionToColumns(extraction: ExtractionSummary) {
 }
 
 /**
- * 指定日の EDINET 書類一覧を取得し、有報の CSV をパースしてマスタに保存する。
- * 管理者が手動で実行するか、将来的に Cron で自動実行する。
+ * Step 1: 指定日の書類一覧からメタデータのみをマスタに登録する（高速、CSV取得なし）
+ * 1日あたり数秒で完了するため、日付ループ中のUI更新がスムーズになる。
  */
-export async function fetchAndStoreMasterData(
+export async function registerMasterMetadata(
   date: string,
-): Promise<{ success: boolean; error?: string; added: number; processed: number }> {
+): Promise<{ success: boolean; error?: string; registered: number; total: number }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です', added: 0, processed: 0 };
+  if (!user) return { success: false, error: '認証が必要です', registered: 0, total: 0 };
 
   try {
     const response = await fetchDocumentList(date);
-    if (!response.results) return { success: true, added: 0, processed: 0 };
+    if (!response.results) return { success: true, registered: 0, total: 0 };
 
     const reports = filterAnnualReports(response.results);
-    let added = 0;
-    let processed = 0;
+    let registered = 0;
 
     for (const report of reports) {
-      processed++;
-
-      // 既にマスタにある場合はスキップ
       const { data: existing } = await supabase
         .from('edinet_master')
         .select('id')
@@ -99,12 +95,10 @@ export async function fetchAndStoreMasterData(
 
       if (existing) continue;
 
-      // 年度を推定
       const fiscalYear = report.periodEnd
         ? new Date(report.periodEnd).getFullYear()
         : new Date(date).getFullYear();
 
-      // まず pending で登録
       const { error: insertError } = await supabase.from('edinet_master').insert({
         doc_id: report.docID,
         sec_code: report.secCode,
@@ -117,50 +111,75 @@ export async function fetchAndStoreMasterData(
         extraction_status: 'pending',
       });
 
-      if (insertError) continue;
-
-      // CSV/XBRL を取得してパース
-      try {
-        let extraction: ExtractionSummary;
-        if (report.csvFlag) {
-          const zipData = await fetchDocumentData(report.docID, 5);
-          extraction = await extractFinancialMetrics(zipData);
-        } else {
-          const zipData = await fetchDocumentData(report.docID, 1);
-          extraction = await extractFinancialMetricsFromXbrl(zipData);
-        }
-
-        const columns = extractionToColumns(extraction);
-
-        await supabase
-          .from('edinet_master')
-          .update({
-            ...columns,
-            extraction_status: 'done',
-            fetched_at: new Date().toISOString(),
-          })
-          .eq('doc_id', report.docID);
-
-        added++;
-      } catch (err) {
-        await supabase
-          .from('edinet_master')
-          .update({
-            extraction_status: 'error',
-            error_message: err instanceof Error ? err.message : 'Unknown error',
-          })
-          .eq('doc_id', report.docID);
-      }
-
-      // レート制限
-      await new Promise((r) => setTimeout(r, 3000));
+      if (!insertError) registered++;
     }
 
-    return { success: true, added, processed };
+    return { success: true, registered, total: reports.length };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'バッチ取得に失敗しました';
-    return { success: false, error: message, added: 0, processed: 0 };
+    const message = error instanceof Error ? error.message : 'メタデータ取得に失敗しました';
+    return { success: false, error: message, registered: 0, total: 0 };
   }
+}
+
+/**
+ * Step 2: pending 状態のマスタレコード1件の CSV/XBRL を取得してパースする。
+ * 1件ずつ呼ぶことで進捗表示をリアルタイムに更新できる。
+ */
+export async function extractSingleMasterRecord(
+  docId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: '認証が必要です' };
+
+  try {
+    // まず CSV (type=5) を試す → 失敗したら XBRL (type=1)
+    let extraction: ExtractionSummary;
+    try {
+      const zipData = await fetchDocumentData(docId, 5);
+      extraction = await extractFinancialMetrics(zipData);
+    } catch {
+      const zipData = await fetchDocumentData(docId, 1);
+      extraction = await extractFinancialMetricsFromXbrl(zipData);
+    }
+
+    const columns = extractionToColumns(extraction);
+
+    await supabase
+      .from('edinet_master')
+      .update({
+        ...columns,
+        extraction_status: 'done',
+        fetched_at: new Date().toISOString(),
+      })
+      .eq('doc_id', docId);
+
+    return { success: true };
+  } catch (err) {
+    await supabase
+      .from('edinet_master')
+      .update({
+        extraction_status: 'error',
+        error_message: err instanceof Error ? err.message : 'Unknown error',
+      })
+      .eq('doc_id', docId);
+
+    return { success: false, error: err instanceof Error ? err.message : 'パース失敗' };
+  }
+}
+
+/** pending 状態のマスタレコード一覧を取得する（Step 2 のループ用） */
+export async function getPendingMasterRecords(): Promise<{
+  data: { doc_id: string; filer_name: string; sec_code: string; fiscal_year: number }[];
+}> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from('edinet_master')
+    .select('doc_id, filer_name, sec_code, fiscal_year')
+    .eq('extraction_status', 'pending')
+    .order('created_at', { ascending: true });
+
+  return { data: data ?? [] };
 }
 
 /**

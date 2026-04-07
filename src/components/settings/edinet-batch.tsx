@@ -1,8 +1,9 @@
 /**
  * EDINET マスタデータのバッチ取得UI（設定画面に配置）
  *
- * 指定した日付範囲の有報をEDINET APIから取得し、
- * edinet_master テーブルに保存する。
+ * 2ステップで実行:
+ * Step 1: 日付範囲の書類一覧を取得 → メタデータのみ DB 登録（高速、1日数秒）
+ * Step 2: pending レコードの CSV/XBRL を1件ずつ取得・パース（進捗がリアルタイム更新）
  */
 'use client';
 
@@ -12,7 +13,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchAndStoreMasterData } from '@/actions/edinet-master';
+import { registerMasterMetadata, getPendingMasterRecords, extractSingleMasterRecord } from '@/actions/edinet-master';
 
 export function EdinetBatchSection() {
   const [startDate, setStartDate] = useState(() => {
@@ -26,40 +27,56 @@ export function EdinetBatchSection() {
 
   const handleRun = async () => {
     setIsRunning(true);
-    setProgress('処理を開始しています...');
 
+    // --- Step 1: メタデータ登録（高速） ---
     const start = new Date(startDate);
     const end = new Date(endDate);
-    let totalAdded = 0;
-    let totalProcessed = 0;
-    let daysProcessed = 0;
     const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    let totalRegistered = 0;
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().slice(0, 10);
-      daysProcessed++;
-      setProgress(`${dateStr} を処理中... (${daysProcessed}/${totalDays}日)`);
+      setProgress(`Step 1/2: ${dateStr} の書類一覧を取得中... (${i + 1}/${totalDays}日)`);
 
       try {
-        const result = await fetchAndStoreMasterData(dateStr);
-        if (result.success) {
-          totalAdded += result.added;
-          totalProcessed += result.processed;
-        }
+        const result = await registerMasterMetadata(dateStr);
+        if (result.success) totalRegistered += result.registered;
       } catch {
         // 個別日付のエラーはスキップ
       }
     }
 
+    setProgress(`Step 1 完了: ${totalRegistered}件を登録。Step 2: 財務データを抽出中...`);
+
+    // --- Step 2: pending レコードを1件ずつパース ---
+    const { data: pending } = await getPendingMasterRecords();
+    let extracted = 0;
+
+    for (const record of pending) {
+      extracted++;
+      setProgress(
+        `Step 2/2: ${record.filer_name}（${record.fiscal_year}）を処理中... (${extracted}/${pending.length}件)`,
+      );
+
+      try {
+        await extractSingleMasterRecord(record.doc_id);
+      } catch {
+        // エラーはDB側でerrorステータスに記録済み
+      }
+    }
+
     setIsRunning(false);
     setProgress(null);
-    toast.success(`完了: ${totalProcessed}件処理、${totalAdded}件を新規追加しました`);
+    toast.success(`完了: ${totalRegistered}件登録、${extracted}件の財務データを抽出しました`);
   };
 
+  /** 検索範囲の日数と推定時間 */
   const days = Math.max(0, Math.ceil(
     (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
   )) + 1;
-  const estimatedMinutes = Math.ceil((days * 5) / 60);
+  const estimatedMinutes = Math.ceil(days * 0.1) + 1; // Step 1 は高速
 
   return (
     <section className="space-y-4">
@@ -109,7 +126,7 @@ export function EdinetBatchSection() {
               )}
             </Button>
             <p className="text-xs text-muted-foreground mt-1">
-              {days}日間（約{estimatedMinutes}分）
+              {days}日間
             </p>
           </div>
         </div>
