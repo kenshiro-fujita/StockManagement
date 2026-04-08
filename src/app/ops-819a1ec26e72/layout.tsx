@@ -1,0 +1,56 @@
+/**
+ * 管理画面レイアウト
+ *
+ * admin ロールを持つユーザーのみアクセス可能。
+ * 一般ユーザーがアクセスした場合は 404 を返す（管理画面の存在を隠す）。
+ */
+import { notFound } from 'next/navigation';
+import { isAdmin } from '@/lib/auth/admin';
+import { connection } from 'next/server';
+import Link from 'next/link';
+import { Shield } from 'lucide-react';
+
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  await connection();
+  const admin = await isAdmin();
+
+  // 管理者でない場合は 404（管理画面の存在を隠す）
+  if (!admin) notFound();
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* 管理画面ヘッダー */}
+      <header className="border-b bg-zinc-900 text-white">
+        <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-amber-400" />
+            <span className="font-bold">管理画面</span>
+          </div>
+          <nav className="flex items-center gap-4 text-sm">
+            <Link href="/ops-819a1ec26e72" className="hover:text-amber-300 transition-colors">
+              ダッシュボード
+            </Link>
+            <Link href="/ops-819a1ec26e72/master" className="hover:text-amber-300 transition-colors">
+              マスタ管理
+            </Link>
+            <Link href="/ops-819a1ec26e72/batch" className="hover:text-amber-300 transition-colors">
+              バッチ取得
+            </Link>
+            <Link href="/stocks" className="text-zinc-400 hover:text-white transition-colors">
+              ← ユーザー画面に戻る
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* メインコンテンツ */}
+      <main className="mx-auto max-w-6xl p-6">
+        {children}
+      </main>
+    </div>
+  );
+}
