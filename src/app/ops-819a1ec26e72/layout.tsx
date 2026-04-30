@@ -40,8 +40,8 @@ export default async function AdminLayout({
             <Link href="/ops-819a1ec26e72/batch" className="hover:text-amber-300 transition-colors">
               バッチ取得
             </Link>
-            <Link href="/stocks" className="text-zinc-400 hover:text-white transition-colors">
-              ← ユーザー画面に戻る
+            <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
+              ← モード選択に戻る
             </Link>
           </nav>
         </div>

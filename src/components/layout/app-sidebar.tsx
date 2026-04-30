@@ -131,6 +131,7 @@ function SidebarLogoutButton() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
+  /** トップページのモード選択画面に戻る（その際にサインアウトもしてモード混在を防ぐ） */
   const handleLogout = async () => {
     const supabase = createClient();
     setIsLoading(true);
@@ -138,7 +139,7 @@ function SidebarLogoutButton() {
     try {
       await supabase.auth.signOut();
       router.refresh();
-      router.push('/auth/login');
+      router.push('/');
     } catch {
       setIsLoading(false);
     }
@@ -152,7 +153,7 @@ function SidebarLogoutButton() {
       disabled={isLoading}
     >
       <LogOut className="h-4 w-4" />
-      {isLoading ? 'ログアウト中...' : 'ログアウト'}
+      {isLoading ? '切り替え中...' : 'モード選択に戻る'}
     </Button>
   );
 }
