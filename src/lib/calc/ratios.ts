@@ -11,10 +11,15 @@ import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 import { roundPercent } from './utils';
 
-/** 自己資本比率 = 自己資本 ÷ 総資産 × 100（%） */
+/**
+ * 自己資本比率 = 自己資本 ÷ 総資産 × 100（%）
+ * equityField/equityLabel は resolveEquity が解決した「実際に使ったカラム」の表示用情報
+ */
 export function calcEquityRatio(
   equity: number,
   totalAssets: number,
+  equityField: string = 'equity',
+  equityLabel: string = '自己資本',
 ): CalcResult<number> {
   const value = totalAssets === 0 ? null : roundPercent((equity / totalAssets) * 100);
   return {
@@ -22,7 +27,7 @@ export function calcEquityRatio(
     metadata: {
       formula: '自己資本比率 = 自己資本 ÷ 総資産 × 100',
       inputs: [
-        { label: '自己資本', value: equity, field: 'equity' },
+        { label: equityLabel, value: equity, field: equityField },
         { label: '総資産', value: totalAssets, field: 'total_assets' },
       ],
       rounding: '小数点以下第2位を四捨五入',
@@ -75,6 +80,8 @@ export function calcOperatingMargin(
 export function calcROE(
   netIncome: number,
   equity: number,
+  equityField: string = 'equity',
+  equityLabel: string = '自己資本',
 ): CalcResult<number> {
   const value = equity === 0 ? null : roundPercent((netIncome / equity) * 100);
   return {
@@ -83,7 +90,7 @@ export function calcROE(
       formula: 'ROE = 純利益 ÷ 自己資本 × 100',
       inputs: [
         { label: '純利益', value: netIncome, field: 'net_income' },
-        { label: '自己資本', value: equity, field: 'equity' },
+        { label: equityLabel, value: equity, field: equityField },
       ],
       rounding: '小数点以下第2位を四捨五入',
       calcVersion: CALC_VERSION,
@@ -117,6 +124,8 @@ export function calcROIC(
   taxRate: number,
   equity: number,
   interestBearingDebt: number,
+  equityField: string = 'equity',
+  equityLabel: string = '自己資本',
 ): CalcResult<number> {
   const investedCapital = equity + interestBearingDebt;
   const value =
@@ -130,7 +139,7 @@ export function calcROIC(
       inputs: [
         { label: '営業利益', value: operatingIncome, field: 'operating_income' },
         { label: '実効税率', value: taxRate, field: 'tax_rate' },
-        { label: '自己資本', value: equity, field: 'equity' },
+        { label: equityLabel, value: equity, field: equityField },
         { label: '有利子負債', value: interestBearingDebt, field: 'interest_bearing_debt' },
       ],
       rounding: '小数点以下第2位を四捨五入',

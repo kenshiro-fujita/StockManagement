@@ -44,12 +44,6 @@ function pct(numerator: number | null, denominator: number | null): string | nul
   return ((numerator / denominator) * 100).toFixed(1) + '%';
 }
 
-/** 安全な除算 → 小数2桁 */
-function ratio2(numerator: number | null, denominator: number | null): string | null {
-  if (numerator == null || denominator == null || denominator === 0) return null;
-  return (numerator / denominator).toFixed(2);
-}
-
 /** 百万円表示 */
 function millions(value: number | null): string | null {
   if (value == null) return null;

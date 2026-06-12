@@ -10,7 +10,7 @@
  */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
-import { roundPercent } from './utils';
+import { roundPercent, truncateYen } from './utils';
 
 /** 安全域 = 理論株価 - 現在株価（円） */
 export function calcSafetyMargin(
@@ -36,14 +36,20 @@ export function calcSafetyMargin(
   };
 }
 
-/** 安全率 = (理論株価 - 現在株価) ÷ 理論株価 × 100（%） */
+/**
+ * 安全率 = (理論株価 - 現在株価) ÷ 理論株価 × 100（%）
+ *
+ * 理論株価が 0 以下の場合は算出不可（null）とする。
+ * 負の理論株価で割ると符号が反転し、債務超過的な銘柄（理論価値が負）が
+ * 「+150% 割安」のように最上位の割安と誤判定されてしまうため。
+ */
 export function calcSafetyRate(
   theoryPrice: number | null,
   currentStockPrice: number | null,
   label: string = '現状',
 ): CalcResult<number> {
   const value =
-    theoryPrice == null || theoryPrice === 0 || currentStockPrice == null
+    theoryPrice == null || theoryPrice <= 0 || currentStockPrice == null
       ? null
       : roundPercent(((theoryPrice - currentStockPrice) / theoryPrice) * 100);
   return {
@@ -78,14 +84,21 @@ export function getValuationLevel(safetyRateValue: number | null): ValuationLeve
   return 'expensive';
 }
 
-/** 理想購入株価 = 理論株価 × 割引係数（デフォルト0.5＝半値） */
+/**
+ * 理想購入株価 = 理論株価 × 割引係数（デフォルト0.5＝半値）
+ *
+ * 理論株価が 0 以下の場合は「買うべき価格が存在しない」ため算出不可（null）。
+ * （負値に floor を適用すると絶対値が増えて意味不明な値になる問題も同時に防ぐ）
+ */
 export function calcIdealBuyPrice(
   theoryPrice: number | null,
   label: string = '現状',
   discountFactor: number = 0.5,
 ): CalcResult<number> {
   const value =
-    theoryPrice == null ? null : Math.floor(theoryPrice * discountFactor);
+    theoryPrice == null || theoryPrice <= 0
+      ? null
+      : truncateYen(theoryPrice * discountFactor);
   return {
     value,
     metadata: {

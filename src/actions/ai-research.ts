@@ -13,6 +13,16 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { getAIProvider, type AIResearchResponse } from '@/lib/ai';
 
+/**
+ * 金額（円）を「N百万円」形式に整形する。
+ * null は「データなし」と表記する — EDINET 取込経由の行は値が null になりうるため、
+ * `null / 1_000_000 === 0` で「売上0百万円」という誤った事実が AI に渡るのを防ぐ
+ */
+function formatMillionYen(value: number | null): string {
+  if (value == null) return 'データなし';
+  return `${(value / 1_000_000).toFixed(0)}百万円`;
+}
+
 /** AI に渡す財務サマリーを組み立てる（直近3期分） */
 async function buildFinancialSummary(
   stockId: string,
@@ -20,7 +30,7 @@ async function buildFinancialSummary(
   const supabase = await createClient();
   const { data } = await supabase
     .from('financial_data')
-    .select('fiscal_year, revenue, operating_income, net_income, total_assets, equity')
+    .select('fiscal_year, revenue, operating_income, net_income, total_assets')
     .eq('stock_id', stockId)
     .order('fiscal_year', { ascending: false })
     .limit(3);
@@ -29,11 +39,11 @@ async function buildFinancialSummary(
 
   return data
     .map(
-      (fd: { fiscal_year: number; revenue: number; operating_income: number; net_income: number; total_assets: number }) =>
-        `${fd.fiscal_year}年: 売上${(fd.revenue / 1_000_000).toFixed(0)}百万円, ` +
-        `営業利益${(fd.operating_income / 1_000_000).toFixed(0)}百万円, ` +
-        `純利益${(fd.net_income / 1_000_000).toFixed(0)}百万円, ` +
-        `総資産${(fd.total_assets / 1_000_000).toFixed(0)}百万円`,
+      (fd: { fiscal_year: number; revenue: number | null; operating_income: number | null; net_income: number | null; total_assets: number | null }) =>
+        `${fd.fiscal_year}年: 売上${formatMillionYen(fd.revenue)}, ` +
+        `営業利益${formatMillionYen(fd.operating_income)}, ` +
+        `純利益${formatMillionYen(fd.net_income)}, ` +
+        `総資産${formatMillionYen(fd.total_assets)}`,
     )
     .join('\n');
 }

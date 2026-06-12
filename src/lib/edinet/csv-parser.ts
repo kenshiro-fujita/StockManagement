@@ -14,14 +14,16 @@
  */
 import JSZip from 'jszip';
 import iconv from 'iconv-lite';
+import { detectAccountingStandard } from './taxonomy';
 import {
-  METRIC_TAGS,
-  METRIC_LABELS,
-  AGGREGATE_METRICS,
-  detectAccountingStandard,
-  type AccountingStandard,
-  type MetricKey,
-} from './taxonomy';
+  extractAllMetrics,
+  findDeiRawValue,
+  type NormalizedFact,
+} from './extraction';
+
+// 抽出結果の型は extraction.ts に一本化した。既存の import 元を壊さないため再エクスポートする
+export type { ExtractionResult, ExtractionSummary } from './extraction';
+import type { ExtractionSummary } from './extraction';
 
 /**
  * CSV から抽出した1つの Fact（XBRL の要素1つに対応）
@@ -36,31 +38,6 @@ export type CsvFact = {
   contextId: string;
   unitId: string;
   value: string;
-};
-
-/**
- * 1つの財務指標の抽出結果
- * - matchedTag: 実際にマッチしたXBRLタグ名（ログ・変更検出に使用）
- * - confidence: 抽出の信頼度（high=タグ一致+値あり, medium=合算, low=未検出）
- */
-export type ExtractionResult = {
-  metricKey: MetricKey;
-  label: string;
-  value: number | null;
-  matchedTag: string | null;
-  contextId: string | null;
-  confidence: 'high' | 'medium' | 'low';
-};
-
-/**
- * 1つの有価証券報告書からの全抽出結果
- * - accountingStandard: 自動判定された会計基準
- * - periodEnd: 決算期末日（年度の推定に使用）
- */
-export type ExtractionSummary = {
-  accountingStandard: AccountingStandard;
-  periodEnd: string | null;
-  results: ExtractionResult[];
 };
 
 /**
@@ -138,34 +115,6 @@ export function parseTsvToFacts(tsv: string): CsvFact[] {
 }
 
 /**
- * contextRef が「連結かつ当期」かどうかを判定する
- *
- * EDINET のコンテキストID命名規則:
- * - "CurrentYear" を含む = 当期
- * - "NonConsolidatedMember" を含まない = 連結（含む場合は単体）
- *
- * P/L（損益計算書）や CF（キャッシュフロー計算書）の数値を取得する際に使用する。
- */
-function isConsolidatedCurrent(contextId: string): boolean {
-  return (
-    (contextId.includes('CurrentYear') || contextId.includes('CurrentDuration') || contextId.includes('CurrentInstant')) &&
-    !contextId.includes('NonConsolidatedMember')
-  );
-}
-
-/**
- * contextRef が「連結かつ当期時点」かどうかを判定する
- * B/S（貸借対照表）の数値（総資産、自己資本等）を取得する際に使用する。
- * B/S は「ある時点」の残高なので Instant、P/L は「期間」の累計なので Duration。
- */
-function isConsolidatedInstant(contextId: string): boolean {
-  return (
-    contextId.includes('CurrentYearInstant') &&
-    !contextId.includes('NonConsolidatedMember')
-  );
-}
-
-/**
  * 日本の有価証券報告書に特有の数値表記を、JavaScript の number に正規化する
  *
  * 処理する表記パターン:
@@ -192,153 +141,32 @@ export function normalizeNumber(raw: string): number | null {
   }
 
   // ダッシュ単体は「該当なし」（null）として扱う
-  if (s === '-' || s === '' || s === '—' || s === '―') return null;
+  // （全角ダッシュは上の置換で既に '-' へ統一済みなので、ここでは半角のみ判定すればよい）
+  if (s === '-' || s === '') return null;
 
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
 /**
- * Fact 配列から指定メトリックの値を抽出する（優先順位付きフォールバック検索）
- *
- * 通常メトリック:
- *   候補タグを先頭から順に検索し、最初にヒットした値を採用する。
- *   例: revenue の IFRS → ["Revenue", "SalesRevenues", ...] を順にチェック
- *
- * 合算メトリック（interest_bearing_debt）:
- *   候補タグの値を全て見つけて合計する。
- *   例: ShortTermLoansPayable + LongTermLoansPayable + BondsPayable
- *
- * B/S vs P/L の判別:
- *   total_assets, equity → Instant（時点残高）で検索
- *   それ以外 → Duration/Current（期間累計）で検索
+ * CsvFact を共有抽出モジュールの NormalizedFact に変換する
+ * 数値化はここで一度だけ行い、生テキストは rawValue として保持する
+ * （DEI 系の文字列ファクトは数値化すると null に潰れるため）
  */
-/** 連結/単体を問わないメトリック（企業全体で1つの値しかない） */
-const CONSOLIDATION_AGNOSTIC_METRICS: MetricKey[] = ['issued_shares', 'eps_basic'];
-
-/** B/S（貸借対照表）項目: Instant（時点）コンテキストで検索する */
-const BS_METRICS: MetricKey[] = [
-  'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
-  'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
-  'shareholders_equity',
-];
-
-/**
- * 合算メトリックの抽出（有利子負債など）
- * 候補タグの値を全て見つけて合計する
- */
-function extractAggregateMetric(
-  facts: CsvFact[],
-  metricKey: MetricKey,
-  candidates: string[],
-): ExtractionResult {
-  let total = 0;
-  let found = false;
-  const matchedTags: string[] = [];
-
-  for (const tag of candidates) {
-    const fact = facts.find(
-      (f) => f.localName === tag && isConsolidatedInstant(f.contextId),
-    );
-    if (fact) {
-      const num = normalizeNumber(fact.value);
-      if (num != null) {
-        total += num;
-        found = true;
-        matchedTags.push(tag);
-      }
-    }
-  }
-
-  return {
-    metricKey,
-    label: METRIC_LABELS[metricKey],
-    value: found ? total : null,
-    matchedTag: matchedTags.length > 0 ? matchedTags.join('+') : null,
-    contextId: null,
-    confidence: found ? 'medium' : 'low',
-  };
-}
-
-/**
- * コンテキストIDが指定メトリックの検索条件に合致するかを判定する
- *
- * - 連結/単体を問わないメトリック: CurrentYear を含めばOK（Member サフィックス付きは除外）
- * - B/S 項目: 連結 + Instant
- * - P/L・CF 項目: 連結 + Duration/Current
- */
-function matchesContext(contextId: string, metricKey: MetricKey): boolean {
-  if (!contextId.includes('CurrentYear')) return false;
-
-  if (CONSOLIDATION_AGNOSTIC_METRICS.includes(metricKey)) {
-    const isPlainContext = contextId === 'CurrentYearInstant' ||
-      contextId === 'CurrentYearInstant_NonConsolidatedMember' ||
-      contextId === 'CurrentYearDuration' ||
-      contextId === 'CurrentYearDuration_NonConsolidatedMember';
-    return isPlainContext || !contextId.includes('Member');
-  }
-
-  if (contextId.includes('NonConsolidatedMember')) return false;
-  if (BS_METRICS.includes(metricKey)) return contextId.includes('Instant');
-  return true;
-}
-
-/**
- * 通常メトリックの抽出（優先順位付きフォールバック検索）
- * 候補タグを先頭から順に検索し、最初にヒットした値を採用する
- */
-function extractSimpleMetric(
-  facts: CsvFact[],
-  metricKey: MetricKey,
-  candidates: string[],
-): ExtractionResult {
-  for (const tag of candidates) {
-    const matchingFacts = facts.filter(
-      (f) => f.localName === tag && matchesContext(f.contextId, metricKey),
-    );
-
-    if (matchingFacts.length > 0) {
-      const fact = matchingFacts[0];
-      const num = normalizeNumber(fact.value);
-      return {
-        metricKey,
-        label: METRIC_LABELS[metricKey],
-        value: num,
-        matchedTag: tag,
-        contextId: fact.contextId,
-        confidence: num != null ? 'high' : 'low',
-      };
-    }
-  }
-
-  return {
-    metricKey,
-    label: METRIC_LABELS[metricKey],
-    value: null,
-    matchedTag: null,
-    contextId: null,
-    confidence: 'low',
-  };
-}
-
-/**
- * メトリック抽出のディスパッチャー: 合算 or 通常を判定して適切な関数に委譲する
- */
-function extractMetric(
-  facts: CsvFact[],
-  metricKey: MetricKey,
-  standard: AccountingStandard,
-): ExtractionResult {
-  const candidates = METRIC_TAGS[metricKey][standard] ?? METRIC_TAGS[metricKey].JGAAP ?? [];
-
-  if (AGGREGATE_METRICS.includes(metricKey)) {
-    return extractAggregateMetric(facts, metricKey, candidates);
-  }
-  return extractSimpleMetric(facts, metricKey, candidates);
+function toNormalizedFacts(facts: CsvFact[]): NormalizedFact[] {
+  return facts.map((f) => ({
+    localName: f.localName,
+    contextId: f.contextId,
+    unitId: f.unitId,
+    value: normalizeNumber(f.value),
+    rawValue: f.value,
+  }));
 }
 
 /**
  * CSV ZIP から主要財務指標を一括抽出する
+ * Fact の生成（ZIP展開・TSVパース・数値正規化）のみ担当し、
+ * 指標の選択ロジックは extraction.ts（CSV/XBRL 共通）に委譲する
  */
 export async function extractFinancialMetrics(
   zipData: ArrayBuffer,
@@ -350,39 +178,15 @@ export async function extractFinancialMetrics(
     allFacts.push(...parseTsvToFacts(csv));
   }
 
-  // 会計基準を判定
-  const deiStandard = allFacts.find((f) => f.localName === 'AccountingStandardsDEI');
-  const standard = detectAccountingStandard(deiStandard?.value);
+  const facts = toNormalizedFacts(allFacts);
 
-  // 決算期末を取得
-  const periodEnd = allFacts.find((f) => f.localName === 'CurrentFiscalYearEndDateDEI');
-
-  // 全メトリックを抽出
-  const metricKeys: MetricKey[] = [
-    'revenue',
-    'operating_profit',
-    'net_income_parent',
-    'total_assets',
-    'equity',
-    'operating_cf',
-    'investing_cf',
-    'issued_shares',
-    'eps_basic',
-    'interest_bearing_debt',
-    'interest_expense',
-    'cash_and_equivalents',
-    'current_assets',
-    'investments_and_other_assets',
-    'current_liabilities',
-    'non_current_liabilities',
-    'shareholders_equity',
-  ];
-
-  const results = metricKeys.map((key) => extractMetric(allFacts, key, standard));
+  // 会計基準と決算期末は文字列ファクト（rawValue）から判定する
+  const standard = detectAccountingStandard(findDeiRawValue(facts, 'AccountingStandardsDEI'));
+  const periodEnd = findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI');
 
   return {
     accountingStandard: standard,
-    periodEnd: periodEnd?.value ?? null,
-    results,
+    periodEnd,
+    results: extractAllMetrics(facts, standard),
   };
 }

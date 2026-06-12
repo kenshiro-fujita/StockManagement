@@ -41,6 +41,7 @@ import {
   calcFutureNetIncome,
 } from './theory-price';
 import { calcSafetyMargin, calcSafetyRate, calcIdealBuyPrice } from './safety';
+import { resolveEquity } from './utils';
 
 /** null の CalcResult を生成するヘルパー */
 function nullResult(formula: string): CalcResult<number> {
@@ -70,8 +71,12 @@ export function calculateAllIndicators(
   const previous = sorted.length > 1 ? sorted[1] : null;
   const debt = latest.interest_bearing_debt ?? 0;
 
+  // 自己資本の解決: 株主資本（shareholders_equity）優先、なければ純資産（equity）
+  // どちらを使ったかは eq.field / eq.label として全指標のメタデータに伝播する
+  const eq = resolveEquity(latest);
+
   // 収益性
-  const equityRatio = calcEquityRatio(latest.equity, latest.total_assets);
+  const equityRatio = calcEquityRatio(eq.value, latest.total_assets, eq.field, eq.label);
   const netProfitMargin = calcNetProfitMargin(latest.net_income, latest.revenue);
   const operatingMargin = calcOperatingMargin(latest.operating_income, latest.revenue);
 
@@ -105,21 +110,28 @@ export function calculateAllIndicators(
   const fcf = calcFCF(latest.operating_cf, latest.investing_cf);
 
   // 資本効率
-  const roe = calcROE(latest.net_income, latest.equity);
+  const roe = calcROE(latest.net_income, eq.value, eq.field, eq.label);
   const roa = calcROA(latest.net_income, latest.total_assets);
-  const roic = calcROIC(latest.operating_income, parameters.tax_rate, latest.equity, debt);
+  const roic = calcROIC(latest.operating_income, parameters.tax_rate, eq.value, debt, eq.field, eq.label);
 
   // 移動平均ROIC（全期間データを使用）
   const roicValues = sorted.map((fd) => {
     const d = fd.interest_bearing_debt ?? 0;
-    return calcROIC(fd.operating_income, parameters.tax_rate, fd.equity, d).value;
+    const fdEq = resolveEquity(fd);
+    return calcROIC(fd.operating_income, parameters.tax_rate, fdEq.value, d, fdEq.field, fdEq.label).value;
   });
   const movingAverageROIC = calcMovingAverageROIC(roicValues);
 
   // 株式指標
   const epsResult = calcEPS(latest.net_income, latest.shares_outstanding);
-  const per = calcPER(latest.current_stock_price, epsResult.value);
-  const pbr = calcPBR(latest.current_stock_price, latest.shares_outstanding, latest.equity);
+  // PER は丸め済み EPS からではなく生の EPS から計算する
+  // （丸め誤差が PER に伝播して系統的にズレるのを防ぐ。表示用の丸めは calcPER 内で行う）
+  const rawEps =
+    latest.shares_outstanding == null || latest.shares_outstanding === 0
+      ? null
+      : latest.net_income / latest.shares_outstanding;
+  const per = calcPER(latest.current_stock_price, rawEps);
+  const pbr = calcPBR(latest.current_stock_price, latest.shares_outstanding, eq.value, eq.field, eq.label);
   const eps = epsResult;
 
   // 理論価値
@@ -130,7 +142,7 @@ export function calculateAllIndicators(
     parameters.growth_rate,
     parameters.cap_multiplier,
   );
-  const assetValue = calcAssetValue(latest.equity);
+  const assetValue = calcAssetValue(eq.value, eq.field, eq.label);
   const theoryPrice = businessValue.value != null && assetValue.value != null
     ? calcTheoryPrice(businessValue.value, assetValue.value, debt, latest.shares_outstanding)
     : nullResult('現状理論株価（事業価値または資産価値算出不可）');
@@ -139,7 +151,7 @@ export function calculateAllIndicators(
     parameters.tax_rate,
     parameters.discount_rate,
     parameters.growth_rate,
-    latest.equity,
+    eq.value,
     debt,
     latest.shares_outstanding,
   );

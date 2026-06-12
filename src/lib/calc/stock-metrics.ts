@@ -60,6 +60,8 @@ export function calcPBR(
   currentStockPrice: number | null,
   sharesOutstanding: number | null,
   equity: number,
+  equityField: string = 'equity',
+  equityLabel: string = '自己資本',
 ): CalcResult<number> {
   const value =
     currentStockPrice == null || sharesOutstanding == null || equity === 0
@@ -72,7 +74,7 @@ export function calcPBR(
       inputs: [
         { label: '現在株価', value: currentStockPrice ?? 0, field: 'current_stock_price' },
         { label: '発行済株式数', value: sharesOutstanding ?? 0, field: 'shares_outstanding' },
-        { label: '自己資本', value: equity, field: 'equity' },
+        { label: equityLabel, value: equity, field: equityField },
       ],
       rounding: '小数点以下第2位を四捨五入',
       calcVersion: CALC_VERSION,

@@ -155,9 +155,12 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
 
   describe('透明性メタデータ（AC2）', () => {
     it('全指標にcalc_versionが含まれる', () => {
+      // バージョン文字列は意図的にハードコードする:
+      // 計算ロジックを変更して CALC_VERSION を上げると、このテストが落ちて
+      // 「ゴールデン値の再検証＋バージョン更新」を強制する仕組み
       const indicators = Object.values(p);
       for (const indicator of indicators) {
-        expect(indicator.metadata.calcVersion).toBe('v1.0.0');
+        expect(indicator.metadata.calcVersion).toBe('v1.1.0');
       }
     });
 

@@ -15,25 +15,27 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import * as cheerio from 'cheerio';
+import { detectAccountingStandard } from './taxonomy';
+import { normalizeNumber, type ExtractionSummary } from './csv-parser';
 import {
-  METRIC_TAGS,
-  METRIC_LABELS,
-  AGGREGATE_METRICS,
-  detectAccountingStandard,
-  type AccountingStandard,
-  type MetricKey,
-} from './taxonomy';
-import { normalizeNumber, type ExtractionResult, type ExtractionSummary } from './csv-parser';
+  extractAllMetrics,
+  findDeiRawValue,
+  type NormalizedFact,
+} from './extraction';
 
 /**
  * XBRL から抽出した1つの Fact
- * CSV の CsvFact と異なり、value は既に数値化済み（iXBRL の scale/sign 適用済み）
+ * CSV の CsvFact と異なり、value は既に数値化済み（iXBRL の scale/sign 適用済み）。
+ * rawValue には生テキストを保持する — AccountingStandardsDEI（"IFRS"）や
+ * CurrentFiscalYearEndDateDEI（"2025-03-31"）は数値化すると null に潰れ、
+ * 会計基準判定と年度推定が恒久的に壊れるため（過去に実際に発生したバグ）
  */
 type XbrlFact = {
   localName: string;
   contextRef: string;
   unitRef: string;
   value: number | null;
+  rawValue: string;
 };
 
 /**
@@ -63,34 +65,23 @@ export async function extractFinancialMetricsFromXbrl(
     }
   }
 
-  // 会計基準を判定
-  const deiStandard = allFacts.find((f) => f.localName === 'AccountingStandardsDEI');
-  const standard = detectAccountingStandard(
-    deiStandard?.value != null ? String(deiStandard.value) : null,
-  );
+  // 共有抽出モジュールの NormalizedFact へ変換（contextRef → contextId の名称差のみ）
+  const facts: NormalizedFact[] = allFacts.map((f) => ({
+    localName: f.localName,
+    contextId: f.contextRef,
+    unitId: f.unitRef,
+    value: f.value,
+    rawValue: f.rawValue,
+  }));
 
-  // 決算期末を取得
-  const periodEndFact = allFacts.find((f) => f.localName === 'CurrentFiscalYearEndDateDEI');
-
-  // 全メトリックを抽出
-  const metricKeys: MetricKey[] = [
-    'revenue', 'operating_profit', 'net_income_parent',
-    'total_assets', 'equity',
-    'operating_cf', 'investing_cf',
-    'issued_shares', 'eps_basic',
-    'interest_bearing_debt', 'interest_expense',
-    'cash_and_equivalents', 'current_assets',
-    'investments_and_other_assets',
-    'current_liabilities', 'non_current_liabilities',
-    'shareholders_equity',
-  ];
-
-  const results = metricKeys.map((key) => extractMetricFromFacts(allFacts, key, standard));
+  // 会計基準と決算期末は文字列ファクト（rawValue）から判定する
+  const standard = detectAccountingStandard(findDeiRawValue(facts, 'AccountingStandardsDEI'));
+  const periodEnd = findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI');
 
   return {
     accountingStandard: standard,
-    periodEnd: periodEndFact?.value != null ? String(periodEndFact.value) : null,
-    results,
+    periodEnd,
+    results: extractAllMetrics(facts, standard),
   };
 }
 
@@ -134,26 +125,26 @@ function parseTraditionalXbrl(xmlContent: string): XbrlFact[] {
         continue;
       }
 
-      // 名前空間付き要素（例: jppfs_cor:NetSales）
-      if (key.includes(':') && parentKey.includes(':')) {
-        // これは属性ではなくテキストノード
-        continue;
-      }
-
       // 属性付きオブジェクトのパターン
       if (key === '#text' && parentKey.includes(':')) {
         const attrs = record as Record<string, unknown>;
-        const contextRef = (attrs['@_contextRef'] as string) ?? '';
-        const unitRef = (attrs['@_unitRef'] as string) ?? '';
+        // isArray: () => true の設定は属性値も配列化する（@_contextRef が ["..."] になる）。
+        // 配列のまま文字列として扱うとコンテキスト照合が常に失敗するため、必ず取り出す
+        const attrOf = (v: unknown): string =>
+          Array.isArray(v) ? String(v[0] ?? '') : v != null ? String(v) : '';
+        const contextRef = attrOf(attrs['@_contextRef']);
+        const unitRef = attrOf(attrs['@_unitRef']);
         const localName = parentKey.includes(':')
           ? parentKey.split(':').pop()!
           : parentKey;
 
+        const rawValue = String(val);
         facts.push({
           localName,
           contextRef,
           unitRef,
-          value: normalizeNumber(String(val)),
+          value: normalizeNumber(rawValue),
+          rawValue,
         });
       }
     }
@@ -200,107 +191,28 @@ function parseInlineXbrl(htmlContent: string): XbrlFact[] {
 
     const localName = name.includes(':') ? name.split(':').pop()! : name;
 
-    facts.push({ localName, contextRef, unitRef, value: num });
+    facts.push({ localName, contextRef, unitRef, value: num, rawValue: rawText });
   });
 
   // ix:nonNumeric — 文字列データ（会計基準判定等に使用）
+  // 数値化（value）は試みるが、本質は rawValue（"IFRS" や日付等の生テキスト）の保持
   $('ix\\:nonNumeric, ix\\:nonnumeric').each((_, el) => {
     const $el = $(el);
     const name = $el.attr('name') ?? '';
     const contextRef = $el.attr('contextref') ?? '';
     const localName = name.includes(':') ? name.split(':').pop()! : name;
+    const rawValue = $el.text().trim();
 
     facts.push({
       localName,
       contextRef,
       unitRef: '',
-      value: normalizeNumber($el.text().trim()),
+      value: normalizeNumber(rawValue),
+      rawValue,
     });
   });
 
   return facts;
 }
 
-function isConsolidatedCurrent(contextRef: string): boolean {
-  return (
-    (contextRef.includes('CurrentYear') || contextRef.includes('CurrentDuration')) &&
-    !contextRef.includes('NonConsolidatedMember')
-  );
-}
-
-function isConsolidatedInstant(contextRef: string): boolean {
-  return (
-    contextRef.includes('CurrentYearInstant') &&
-    !contextRef.includes('NonConsolidatedMember')
-  );
-}
-
-function extractMetricFromFacts(
-  facts: XbrlFact[],
-  metricKey: MetricKey,
-  standard: AccountingStandard,
-): ExtractionResult {
-  const candidates = METRIC_TAGS[metricKey][standard] ?? METRIC_TAGS[metricKey].JGAAP ?? [];
-  const isAggregate = AGGREGATE_METRICS.includes(metricKey);
-
-  if (isAggregate) {
-    let total = 0;
-    let found = false;
-    const matchedTags: string[] = [];
-
-    for (const tag of candidates) {
-      const fact = facts.find(
-        (f) => f.localName === tag && isConsolidatedInstant(f.contextRef),
-      );
-      if (fact?.value != null) {
-        total += fact.value;
-        found = true;
-        matchedTags.push(tag);
-      }
-    }
-
-    return {
-      metricKey,
-      label: METRIC_LABELS[metricKey],
-      value: found ? total : null,
-      matchedTag: matchedTags.length > 0 ? matchedTags.join('+') : null,
-      contextId: null,
-      confidence: found ? 'medium' : 'low',
-    };
-  }
-
-  const bsMetrics: MetricKey[] = [
-    'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
-    'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
-    'shareholders_equity',
-  ];
-  const isBs = bsMetrics.includes(metricKey);
-
-  for (const tag of candidates) {
-    const matchingFacts = facts.filter(
-      (f) =>
-        f.localName === tag &&
-        (isBs ? isConsolidatedInstant(f.contextRef) : isConsolidatedCurrent(f.contextRef)),
-    );
-
-    if (matchingFacts.length > 0 && matchingFacts[0].value != null) {
-      return {
-        metricKey,
-        label: METRIC_LABELS[metricKey],
-        value: matchingFacts[0].value,
-        matchedTag: tag,
-        contextId: matchingFacts[0].contextRef,
-        confidence: 'high',
-      };
-    }
-  }
-
-  return {
-    metricKey,
-    label: METRIC_LABELS[metricKey],
-    value: null,
-    matchedTag: null,
-    contextId: null,
-    confidence: 'low',
-  };
-}
+// コンテキスト判定・メトリック抽出は extraction.ts（CSV/XBRL 共通）に一本化した

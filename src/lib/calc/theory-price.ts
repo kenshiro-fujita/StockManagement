@@ -11,6 +11,7 @@
  */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
+import { roundYen, truncateYen, roundPercent } from './utils';
 
 /**
  * 事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)（DCF 永久成長モデル）
@@ -49,7 +50,7 @@ export function calcBusinessValue(
 
   const dcfValue = afterTaxIncome / rMinusG;
   const capValue = operatingIncome * capMultiplier * (1 - taxRate);
-  const value = Math.round(Math.min(dcfValue, capValue));
+  const value = roundYen(Math.min(dcfValue, capValue));
   const capped = capValue < dcfValue;
 
   return {
@@ -71,13 +72,21 @@ export function calcBusinessValue(
   };
 }
 
-/** 現状資産価値 = 自己資本（株主資本） */
-export function calcAssetValue(equity: number): CalcResult<number> {
+/**
+ * 現状資産価値 = 自己資本
+ * equityField/equityLabel は呼び出し側（resolveEquity）が解決した
+ * 「実際にどのカラムを使ったか」を計算根拠表示に残すための情報
+ */
+export function calcAssetValue(
+  equity: number,
+  equityField: string = 'equity',
+  equityLabel: string = '自己資本',
+): CalcResult<number> {
   return {
     value: equity,
     metadata: {
-      formula: '資産価値 = 自己資本（株主資本）',
-      inputs: [{ label: '自己資本', value: equity, field: 'equity' }],
+      formula: '資産価値 = 自己資本（株主資本優先、なければ純資産）',
+      inputs: [{ label: equityLabel, value: equity, field: equityField }],
       rounding: 'なし（入力値そのまま）',
       calcVersion: CALC_VERSION,
     },
@@ -97,7 +106,7 @@ export function calcTheoryPrice(
   const value =
     sharesOutstanding == null || sharesOutstanding === 0
       ? null
-      : Math.floor(
+      : truncateYen(
           (businessValue + assetValue - interestBearingDebt) / sharesOutstanding,
         );
   return {
@@ -151,7 +160,7 @@ export function calcGrowthTheoryPrice(
   }
 
   const businessValueDCF = operatingIncome * (1 - taxRate) / rMinusG;
-  const value = Math.floor(
+  const value = truncateYen(
     (businessValueDCF + equity - interestBearingDebt) / sharesOutstanding,
   );
   return {
@@ -181,7 +190,7 @@ export function calcTheoryMarketCap(
   const value =
     theoryPrice == null || sharesOutstanding == null
       ? null
-      : Math.round(theoryPrice * sharesOutstanding);
+      : roundYen(theoryPrice * sharesOutstanding);
   return {
     value,
     metadata: {
@@ -204,7 +213,7 @@ export function calcTheoryPER(
   const value =
     theoryMarketCap == null || netIncome === 0
       ? null
-      : Math.round((theoryMarketCap / netIncome) * 100) / 100;
+      : roundPercent(theoryMarketCap / netIncome);
   return {
     value,
     metadata: {
@@ -228,7 +237,7 @@ export function calcFutureTheoryMarketCap(
   const value =
     theoryMarketCap == null
       ? null
-      : Math.round(theoryMarketCap * Math.pow(1 + growthRate, years));
+      : roundYen(theoryMarketCap * Math.pow(1 + growthRate, years));
   return {
     value,
     metadata: {
@@ -249,7 +258,7 @@ export function calcFutureNetIncome(
   growthRate: number,
   years: number = 5,
 ): CalcResult<number> {
-  const value = Math.round(netIncome * Math.pow(1 + growthRate, years));
+  const value = roundYen(netIncome * Math.pow(1 + growthRate, years));
   return {
     value,
     metadata: {

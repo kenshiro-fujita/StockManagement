@@ -8,6 +8,7 @@ import {
   updateStockSchema,
   type UpdateStockInput,
 } from '@/lib/schemas/stocks';
+import { PARAMETER_DEFAULTS } from '@/lib/schemas/parameters';
 
 export async function createStock(
   data: CreateStockInput
@@ -43,13 +44,21 @@ export async function createStock(
   }
 
   // パラメータをデフォルト値で自動作成（ユーザーは後から変更可能）
-  await supabase.from('parameters').insert({
+  // デフォルト値の唯一の真実の源は PARAMETER_DEFAULTS（schemas/parameters.ts）。
+  // ここにハードコードすると DB デフォルト・UI 表示と食い違い、
+  // 銘柄の作成経路によって理論株価が変わるバグになる（過去に cap_multiplier 20 vs 10 で発生）
+  const { error: paramsError } = await supabase.from('parameters').insert({
     stock_id: newStock.id,
-    discount_rate: 0.08,    // 割引率 8%
-    growth_rate: 0.02,      // 永久成長率 2%
-    tax_rate: 0.30,         // 実効税率 30%（日本の法定実効税率の近似値）
-    cap_multiplier: 20,     // 上限倍率 20倍
+    ...PARAMETER_DEFAULTS,
   });
+  if (paramsError) {
+    // パラメータが無いと理論株価が計算できないため、失敗を握り潰さず通知する
+    console.error('parameters insert failed:', paramsError);
+    return {
+      success: false,
+      error: '銘柄は登録されましたが、パラメータの初期化に失敗しました。パラメータタブで保存し直してください。',
+    };
+  }
 
   revalidatePath('/stocks');
   return { success: true };

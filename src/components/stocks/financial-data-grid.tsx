@@ -176,21 +176,36 @@ export function FinancialDataGrid({
     return init;
   });
 
-  const [dirtyIds, setDirtyIds] = useState<Set<string>>(new Set());
+  // dirty 管理はセル単位で行う。
+  // 行単位だと「1セル編集して保存」で全フィールドが百万円丸めの表示値から
+  // 逆変換されて書き戻され、EDINET 取込した円精度（例: 4,112,318,000円）が
+  // 保存のたびに 4,112,000,000円 へ静かに劣化していくため。
+  const [dirtyCells, setDirtyCells] = useState<Record<string, Set<GridRowKey>>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [addingYear, setAddingYear] = useState(false);
   const [newYear, setNewYear] = useState(() => {
     if (sorted.length === 0) return new Date().getFullYear();
-    // 既存年度の最小値 - 1（過去を追加しやすく）か最大値 + 1
-    return sorted[0].fiscal_year + 1;
+    // sorted は昇順なので末尾が最新年度。最新+1 をデフォルトにする
+    // （先頭+1 だと既存年度と衝突して追加エラーになる）
+    return sorted[sorted.length - 1].fiscal_year + 1;
   });
+
+  const isRowDirty = useCallback(
+    (rowId: string) => (dirtyCells[rowId]?.size ?? 0) > 0,
+    [dirtyCells],
+  );
 
   const handleCellChange = useCallback((rowId: string, key: GridRowKey, value: string) => {
     setCells((prev) => ({
       ...prev,
       [rowId]: { ...prev[rowId], [key]: value },
     }));
-    setDirtyIds((prev) => new Set([...prev, rowId]));
+    setDirtyCells((prev) => {
+      const next = { ...prev };
+      next[rowId] = new Set(next[rowId] ?? []);
+      next[rowId].add(key);
+      return next;
+    });
   }, []);
 
   const handleSave = useCallback(async (row: FullFinancialDataRow) => {
@@ -207,25 +222,33 @@ export function FinancialDataGrid({
       input_unit: 'yen',
     };
 
+    const rowDirty = dirtyCells[row.id] ?? new Set<GridRowKey>();
     for (const r of GRID_ROWS) {
-      const dbValue = fromDisplayValue(cellState[r.key], r.key);
-      data[r.key] = dbValue != null ? String(dbValue) : '';
+      if (rowDirty.has(r.key)) {
+        // ユーザーが編集したセルのみ表示値（百万円）から逆変換する
+        const dbValue = fromDisplayValue(cellState[r.key], r.key);
+        data[r.key] = dbValue != null ? String(dbValue) : '';
+      } else {
+        // 未編集セルは DB の生値（円精度）をそのまま書き戻し、丸めによる劣化を防ぐ
+        const original = row[r.key as keyof FullFinancialDataRow] as number | null;
+        data[r.key] = original != null ? String(original) : '';
+      }
     }
 
     const result = await updateFinancialData(row.id, data as Parameters<typeof updateFinancialData>[1]);
     setSavingId(null);
 
     if (result.success) {
-      setDirtyIds((prev) => {
-        const next = new Set(prev);
-        next.delete(row.id);
+      setDirtyCells((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
         return next;
       });
       toast.success(`${row.fiscal_year}年度を保存しました`);
     } else {
       toast.error(result.error ?? '保存に失敗しました');
     }
-  }, [cells, stockId]);
+  }, [cells, dirtyCells, stockId]);
 
   const handleAddYear = useCallback(async () => {
     setAddingYear(true);
@@ -335,7 +358,7 @@ export function FinancialDataGrid({
                       value={cells[row.id]?.[gridRow.key] ?? ''}
                       onChange={(e) => handleCellChange(row.id, gridRow.key, e.target.value)}
                       className={`w-full text-right tabular-nums text-sm h-8 grid-cell-input ${
-                        dirtyIds.has(row.id) ? 'border-amber-400' : ''
+                        dirtyCells[row.id]?.has(gridRow.key) ? 'border-amber-400' : ''
                       }`}
                       placeholder="—"
                     />
@@ -404,9 +427,9 @@ export function FinancialDataGrid({
                   <div className="flex items-center justify-center gap-1">
                     <Button
                       size="sm"
-                      variant={dirtyIds.has(row.id) ? 'default' : 'ghost'}
+                      variant={isRowDirty(row.id) ? 'default' : 'ghost'}
                       onClick={() => handleSave(row)}
-                      disabled={savingId === row.id || !dirtyIds.has(row.id)}
+                      disabled={savingId === row.id || !isRowDirty(row.id)}
                       className="h-7 px-2"
                     >
                       <Save className="h-3 w-3 mr-1" />
