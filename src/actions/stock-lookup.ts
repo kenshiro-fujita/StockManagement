@@ -6,7 +6,8 @@
  */
 'use server';
 
-import { fetchDocumentList, filterAnnualReports } from '@/lib/edinet/client';
+import { fetchDocumentList } from '@/lib/edinet/client';
+import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 
 export type StockLookupResult = {
   companyName: string;
@@ -21,11 +22,11 @@ export async function lookupStockByCode(
     return { success: false, error: '4桁の証券コードを入力してください' };
   }
 
-  if (!process.env.EDINET_API_KEY) {
-    return { success: false, error: 'EDINET APIキーが未設定です。設定画面から登録してください。' };
-  }
-
   try {
+    // user_settings → 環境変数 の順で解決（env 直チェックだと設定画面で登録した
+    // キーを持つユーザーを誤ってブロックしてしまうため、共通の解決ロジックを使う）
+    const apiKey = await resolveEdinetApiKey();
+
     // 直近30日分を検索（有報以外の書類にも企業名が含まれる）
     const today = new Date();
     for (let i = 0; i < 30; i++) {
@@ -33,7 +34,7 @@ export async function lookupStockByCode(
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().slice(0, 10);
 
-      const response = await fetchDocumentList(dateStr);
+      const response = await fetchDocumentList(dateStr, apiKey);
       if (!response.results) continue;
 
       // secCode の先頭4桁で照合

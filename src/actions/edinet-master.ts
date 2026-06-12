@@ -9,7 +9,9 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { isAdmin } from '@/lib/auth/admin';
 import { fetchDocumentList, filterAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
+import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 import { extractFinancialMetrics } from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { ExtractionSummary } from '@/lib/edinet/csv-parser';
@@ -76,11 +78,15 @@ export async function registerMasterMetadata(
   date: string,
 ): Promise<{ success: boolean; error?: string; registered: number; total: number }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です', registered: 0, total: 0 };
+  // 管理画面専用アクション。Server Action は UI を経由せず直接 POST できるため、
+  // レイアウトの表示ゲートとは別に、アクション自身でも管理者権限を検証する
+  if (!(await isAdmin())) {
+    return { success: false, error: '権限がありません', registered: 0, total: 0 };
+  }
 
   try {
-    const response = await fetchDocumentList(date);
+    const apiKey = await resolveEdinetApiKey();
+    const response = await fetchDocumentList(date, apiKey);
     if (!response.results) return { success: true, registered: 0, total: 0 };
 
     const reports = filterAnnualReports(response.results);
@@ -129,17 +135,19 @@ export async function extractSingleMasterRecord(
   docId: string,
 ): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です' };
+  // 管理画面専用アクション（外部APIの大量呼び出しを伴うため管理者限定）
+  if (!(await isAdmin())) return { success: false, error: '権限がありません' };
 
   try {
+    const apiKey = await resolveEdinetApiKey();
+
     // まず CSV (type=5) を試す → 失敗したら XBRL (type=1)
     let extraction: ExtractionSummary;
     try {
-      const zipData = await fetchDocumentData(docId, 5);
+      const zipData = await fetchDocumentData(docId, 5, apiKey);
       extraction = await extractFinancialMetrics(zipData);
     } catch {
-      const zipData = await fetchDocumentData(docId, 1);
+      const zipData = await fetchDocumentData(docId, 1, apiKey);
       extraction = await extractFinancialMetricsFromXbrl(zipData);
     }
 
@@ -172,6 +180,9 @@ export async function extractSingleMasterRecord(
 export async function getPendingMasterRecords(): Promise<{
   data: { doc_id: string; filer_name: string; sec_code: string; fiscal_year: number }[];
 }> {
+  // 管理画面専用（バッチ処理のループ起点になるため管理者限定）
+  if (!(await isAdmin())) return { data: [] };
+
   const supabase = await createClient();
   const { data } = await supabase
     .from('edinet_master')
@@ -189,6 +200,9 @@ export async function searchMasterByStockCode(
   stockCode: string,
 ): Promise<{ success: boolean; data?: MasterRow[] }> {
   const supabase = await createClient();
+  // 一般ユーザー向けの参照系だが、未認証の匿名アクセスは拒否する
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, data: [] };
 
   // 4桁の証券コード → 5桁の secCode（末尾0）で検索
   const secCode5 = stockCode.length === 4 ? stockCode + '0' : stockCode;
@@ -213,6 +227,17 @@ export async function importMasterToFinancialData(
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: '認証が必要です' };
+
+  // 取り込み先の銘柄が自分のものであることを確認する
+  // （RLS でも防がれるが、他人の stock_id を指す行を自分名義で作る事故を防ぐ多層防御）
+  const { data: ownedStock } = await supabase
+    .from('stocks')
+    .select('id')
+    .eq('id', stockId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (!ownedStock) return { success: false, error: '対象の銘柄が見つかりません' };
 
   const { data: master } = await supabase
     .from('edinet_master')

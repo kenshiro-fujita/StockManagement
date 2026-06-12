@@ -14,6 +14,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
+import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
@@ -35,7 +36,9 @@ export async function searchEdinetDocuments(
   }
 
   try {
-    const reports = await searchAnnualReports(stockCode, startDate, endDate);
+    // キーはリクエストごとに解決する（モジュールキャッシュ禁止 — api-key.ts 参照）
+    const apiKey = await resolveEdinetApiKey();
+    const reports = await searchAnnualReports(stockCode, startDate, endDate, apiKey);
 
     if (reports.length === 0) {
       return { success: true, data: [] };
@@ -113,10 +116,12 @@ export async function extractFinancialData(
   }
 
   try {
+    const apiKey = await resolveEdinetApiKey();
+
     // CSV 優先、フォールバックで XBRL
     if (csvFlag) {
       try {
-        const zipData = await fetchDocumentData(docID, 5);
+        const zipData = await fetchDocumentData(docID, 5, apiKey);
         const summary = await extractFinancialMetrics(zipData);
         return { success: true, data: summary };
       } catch {
@@ -125,7 +130,7 @@ export async function extractFinancialData(
     }
 
     // XBRL パース（csvFlag=0 または CSV取得失敗時）
-    const xbrlZip = await fetchDocumentData(docID, 1);
+    const xbrlZip = await fetchDocumentData(docID, 1, apiKey);
     const summary = await extractFinancialMetricsFromXbrl(xbrlZip);
     return { success: true, data: summary };
   } catch (error) {

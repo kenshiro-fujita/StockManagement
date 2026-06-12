@@ -47,10 +47,16 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  // 開発中は認証必須を解除し、/ をモード選択トップページにする。
-  // 各モードで自動ログインするため、リダイレクトは行わない。
-  // user 変数は将来の認証復活時のために残す。
-  void user;
+  // 未認証ユーザーは公開パス（トップページと認証フロー）以外へアクセスできない。
+  // ページ側のゲートと二重になるが、middleware を第一防衛線とする多層防御。
+  const { pathname } = request.nextUrl;
+  const isPublicPath = pathname === '/' || pathname.startsWith('/auth');
+
+  if (!user && !isPublicPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/auth/login';
+    return NextResponse.redirect(url);
+  }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:

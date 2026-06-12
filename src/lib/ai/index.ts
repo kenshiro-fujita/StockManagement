@@ -7,14 +7,14 @@
  */
 import type { AIProvider } from './provider';
 import { ClaudeProvider } from './claude';
-import { getSetting } from '@/actions/settings';
+import { getUserSetting } from '@/lib/settings/user-settings';
 
 /**
  * 現在の AI プロバイダーを取得する
  * user_settings のキーを優先し、なければ環境変数にフォールバック
  */
 export async function getAIProvider(): Promise<AIProvider> {
-  const userKey = await getSetting('anthropic_api_key');
+  const userKey = await getUserSetting('anthropic_api_key');
   const apiKey = userKey || process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {

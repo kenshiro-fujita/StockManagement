@@ -44,3 +44,6 @@ next-env.d.ts
 # project-specific
 data/personal/
 .claude/settings.local.json
+
+# Claude Code settings (may contain local secrets in permission allowlists)
+.claude/settings.json

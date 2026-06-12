@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AppSidebar, type SidebarStock } from '@/components/layout/app-sidebar';
 import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
+import { redirect } from 'next/navigation';
 
 async function SidebarWithStocks() {
   await connection();
@@ -29,11 +30,18 @@ async function SidebarWithStocks() {
   return <AppSidebar stocks={sidebarStocks} />;
 }
 
-export default function SettingsLayout({
+export default async function SettingsLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // middleware と二重のゲート（多層防御）。未認証ならログインへ
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/auth/login');
+
   return (
     <SidebarProvider
       style={{ '--sidebar-width': '15rem' } as React.CSSProperties}

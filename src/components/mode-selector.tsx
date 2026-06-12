@@ -1,9 +1,13 @@
 /**
- * モード選択コンポーネント（トップページ用）
+ * モード選択コンポーネント（トップページ・開発環境専用）
  *
- * 通常モード or 管理者モードを選択。
- * クリック時にハードコードされたテストユーザーで自動ログインしてから対応画面に遷移する。
- * 開発中の利便性のため、ログイン認証を意識せずに使えるようにする。
+ * 通常モード or 管理者モードを選択し、開発用アカウントで自動ログインして遷移する。
+ *
+ * セキュリティ上の制約:
+ * - このコンポーネントは開発環境（NODE_ENV=development）でのみ描画される
+ *   （親の page.tsx でゲート。資格情報を本番バンドルに含めないため）
+ * - 資格情報はコードに書かず、環境変数（.env.local）から読む。
+ *   本番環境では NEXT_PUBLIC_DEV_LOGIN_* を設定しないこと。
  */
 'use client';
 
@@ -13,19 +17,37 @@ import { LayoutList, Shield, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 
-/** 開発用の固定アカウント */
-const ACCOUNTS = {
-  user: { email: 'test@example.com', password: 'Test1234!', dest: '/stocks' },
-  admin: { email: 'fujimaster@stockmgmt.local', password: 'Fj!M4st3r#2026x', dest: '/ops-819a1ec26e72' },
-} as const;
+/** 開発用アカウントを環境変数から解決する（未設定なら null） */
+function getDevAccount(mode: 'user' | 'admin') {
+  const email =
+    mode === 'user'
+      ? process.env.NEXT_PUBLIC_DEV_LOGIN_USER_EMAIL
+      : process.env.NEXT_PUBLIC_DEV_LOGIN_ADMIN_EMAIL;
+  const password =
+    mode === 'user'
+      ? process.env.NEXT_PUBLIC_DEV_LOGIN_USER_PASSWORD
+      : process.env.NEXT_PUBLIC_DEV_LOGIN_ADMIN_PASSWORD;
+  const dest =
+    mode === 'user' ? '/stocks' : `/${process.env.NEXT_PUBLIC_ADMIN_PATH ?? 'ops-default'}`;
+
+  if (!email || !password) return null;
+  return { email, password, dest };
+}
 
 export function ModeSelector() {
   const [loadingMode, setLoadingMode] = useState<'user' | 'admin' | null>(null);
   const router = useRouter();
 
   const handleSelect = async (mode: 'user' | 'admin') => {
+    const account = getDevAccount(mode);
+    if (!account) {
+      toast.error(
+        '開発用ログイン情報が未設定です。.env.local に NEXT_PUBLIC_DEV_LOGIN_* を設定してください。',
+      );
+      return;
+    }
+
     setLoadingMode(mode);
-    const account = ACCOUNTS[mode];
     const supabase = createClient();
 
     // 既存セッションがあればサインアウトしてから新規ログイン（モード切り替え時の混在を防ぐ）

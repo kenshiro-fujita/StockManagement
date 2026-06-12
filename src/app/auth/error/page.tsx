@@ -3,6 +3,11 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 const errorMessages: Record<string, string> = {
+  // 固定エラーコード（confirm route から渡される。生メッセージはURLに載せない方針）
+  verification_failed:
+    '認証リンクが無効または期限切れです。再度サインアップしてください。',
+  missing_params: '認証リンクが無効です。再度サインアップしてください。',
+  // 旧形式（生メッセージ）の後方互換。メール内の古いリンク経由で届く可能性があるため残す
   'No token hash or type':
     '認証リンクが無効です。再度サインアップしてください。',
   'Email link is invalid or has expired':

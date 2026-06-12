@@ -21,28 +21,10 @@ const MAX_RETRIES = 3;
 /** リトライ間隔のベース値（レート制限対策: 3秒） */
 const RETRY_BASE_DELAY_MS = 3_000;
 
-/** EDINET API キーを取得する（user_settings → 環境変数の順で解決） */
-let _cachedApiKey: string | null = null;
-
-async function resolveApiKey(): Promise<string> {
-  if (_cachedApiKey) return _cachedApiKey;
-  try {
-    const { getSetting } = await import('@/actions/settings');
-    const userKey = await getSetting('edinet_api_key');
-    if (userKey) {
-      _cachedApiKey = userKey;
-      return userKey;
-    }
-  } catch {
-    // Server Action が使えない場合はフォールバック
-  }
-  const envKey = process.env.EDINET_API_KEY;
-  if (envKey) {
-    _cachedApiKey = envKey;
-    return envKey;
-  }
-  throw new Error('EDINET APIキーが設定されていません。ユーザー設定画面から登録してください。');
-}
+// APIキーはこのモジュールでは解決しない（モジュールスコープのキャッシュは
+// サーバーレス環境でユーザー間にキーが漏用される事故になるため）。
+// 呼び出し側（Server Actions）が lib/edinet/api-key.ts の resolveEdinetApiKey() で
+// リクエストごとに解決し、各関数へ引数として渡す。
 
 /**
  * タイムアウト付き fetch + 指数バックオフリトライ
@@ -101,11 +83,14 @@ function sleep(ms: number): Promise<void> {
 /**
  * 指定日付の書類一覧を取得する
  */
-export async function fetchDocumentList(date: string): Promise<EdinetDocListResponse> {
+export async function fetchDocumentList(
+  date: string,
+  apiKey: string,
+): Promise<EdinetDocListResponse> {
   const url = new URL(`${EDINET_BASE_URL}/documents.json`);
   url.searchParams.set('date', date);
   url.searchParams.set('type', '2');
-  url.searchParams.set('Subscription-Key', await resolveApiKey());
+  url.searchParams.set('Subscription-Key', apiKey);
 
   const res = await fetchWithRetry(url.toString());
   return (await res.json()) as EdinetDocListResponse;
@@ -118,10 +103,11 @@ export async function fetchDocumentList(date: string): Promise<EdinetDocListResp
 export async function fetchDocumentData(
   docID: string,
   type: 1 | 5,
+  apiKey: string,
 ): Promise<ArrayBuffer> {
   const url = new URL(`${EDINET_BASE_URL}/documents/${docID}`);
   url.searchParams.set('type', String(type));
-  url.searchParams.set('Subscription-Key', await resolveApiKey());
+  url.searchParams.set('Subscription-Key', apiKey);
 
   const res = await fetchWithRetry(url.toString());
 
@@ -182,6 +168,7 @@ export async function searchAnnualReports(
   stockCode: string,
   startDate: string,
   endDate: string,
+  apiKey: string,
 ): Promise<AnnualReport[]> {
   const results: AnnualReport[] = [];
   const start = new Date(startDate);
@@ -191,7 +178,7 @@ export async function searchAnnualReports(
     const dateStr = d.toISOString().slice(0, 10);
 
     try {
-      const response = await fetchDocumentList(dateStr);
+      const response = await fetchDocumentList(dateStr, apiKey);
       if (!response.results) continue;
 
       const reports = filterAnnualReports(response.results);
