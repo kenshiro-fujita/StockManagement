@@ -80,7 +80,7 @@ export class ClaudeProvider implements AIProvider {
   private apiKey: string;
   private model: string;
 
-  constructor(apiKey: string, model = 'claude-sonnet-4-20250514') {
+  constructor(apiKey: string, model = 'claude-opus-4-8') {
     this.apiKey = apiKey;
     this.model = model;
   }
