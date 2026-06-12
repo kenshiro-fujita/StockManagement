@@ -1,0 +1,52 @@
+# ============================================================================
+# Codex CLI 設定テンプレート（StockManagement 用）
+#
+# このファイルの内容を ~/.codex/config.toml にコピー（または追記）してください。
+# install.sh を実行すると自動でマージ用にコピーされます。
+#
+# 公式リファレンス: https://developers.openai.com/codex/config-reference
+# ============================================================================
+
+# --- モデル ---------------------------------------------------------------
+# 利用したいモデルに合わせて変更してください（例: "gpt-5.5"）。
+model = "gpt-5.5"
+
+# --- 承認ポリシー ---------------------------------------------------------
+# Claude Code の「ペース優先・細かい確認を省略」に対応する設定です。
+#   untrusted   … 毎回確認（最も慎重）
+#   on-request  … エージェントが必要と判断したときだけ確認（推奨・バランス型）
+#   never       … 一切確認しない（サンドボックス内で完全自走）
+# 趣味ペースで一気通貫に進めたい場合は "on-request"、
+# 監視なしでガンガン回したい場合は "never" を検討してください。
+approval_policy = "on-request"
+
+# --- サンドボックス -------------------------------------------------------
+# workspace-write … ワークスペース配下への書き込みを許可（Claude の Edit/Write 相当）。
+#   read-only         … 読み取りのみ
+#   danger-full-access … 制限なし（非推奨）
+sandbox_mode = "workspace-write"
+
+[sandbox_workspace_write]
+# npm install / supabase / EDINET API 等でネットワークが必要なため true。
+# Claude Code の WebFetch/WebSearch/curl 許可に相当します。
+network_access = true
+# .next・node_modules などビルド成果物への書き込みを明示的に許可。
+# 実際のパスに合わせて調整してください。
+writable_roots = [
+  "/Users/fujita_kenshirou/projects/StockManagement/.next",
+  "/Users/fujita_kenshirou/projects/StockManagement/node_modules",
+]
+
+# --- プロジェクトの信頼設定 -----------------------------------------------
+# trusted にすると、このリポジトリ直下の .codex/ 設定が読み込まれます。
+[projects."/Users/fujita_kenshirou/projects/StockManagement"]
+trust_level = "trusted"
+
+# --- MCP サーバー（必要に応じて）------------------------------------------
+# Claude Code で MCP を使っていた場合はここに移植します。
+# 現状の StockManagement では未使用のためコメントアウトしています。
+#
+# [mcp_servers.example]
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+# enabled = true
