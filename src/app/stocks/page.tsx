@@ -4,33 +4,15 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { StockTable, type StockWithIndicators } from '@/components/stocks/stock-table';
 import { Skeleton } from '@/components/ui/skeleton';
-import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
-import { calculateAllIndicators } from '@/lib/calc';
-import type { FullFinancialDataRow } from '@/lib/types/financial-data';
-import type { ParametersRow } from '@/lib/types/parameters';
+import { getStocksWithIndicators } from '@/lib/stocks/stocks-with-indicators';
 
 async function StockList() {
   await connection();
-  const supabase = await createClient();
+  // データ取得と指標計算は共有関数に集約（layout のサイドバーと cache() で結果を共有）
+  const stocks = await getStocksWithIndicators();
 
-  // 3テーブルを並列クエリ（N+1回避）
-  const [{ data: stocks }, { data: allFinancialData }, { data: allParameters }] =
-    await Promise.all([
-      supabase
-        .from('stocks')
-        .select('id, stock_code, company_name, market, sector, roster_category, rating, buy_priority')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('financial_data')
-        .select('*')
-        .order('fiscal_year', { ascending: false }),
-      supabase
-        .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier'),
-    ]);
-
-  if (!stocks || stocks.length === 0) {
+  if (stocks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
         <h1 className="text-3xl font-bold">銘柄一覧</h1>
@@ -47,54 +29,18 @@ async function StockList() {
     );
   }
 
-  // stock_id ごとにグループ化
-  const financialByStock = new Map<string, FullFinancialDataRow[]>();
-  for (const fd of allFinancialData ?? []) {
-    const list = financialByStock.get(fd.stock_id) ?? [];
-    list.push(fd);
-    financialByStock.set(fd.stock_id, list);
-  }
-
-  const paramsByStock = new Map<string, ParametersRow>();
-  for (const p of allParameters ?? []) {
-    paramsByStock.set(p.stock_id, {
-      id: p.id,
-      stock_id: p.stock_id,
-      discount_rate: Number(p.discount_rate),
-      growth_rate: Number(p.growth_rate),
-      tax_rate: Number(p.tax_rate),
-      cap_multiplier: Number(p.cap_multiplier),
-    });
-  }
-
-  // 銘柄ごとに指標を計算
-  const stocksWithIndicators: StockWithIndicators[] = stocks.map((stock) => {
-    const fd = financialByStock.get(stock.id) ?? [];
-    const params = paramsByStock.get(stock.id) ?? null;
-
-    let theoryPrice: number | null = null;
-    let safetyRateCurrent: number | null = null;
-
-    if (fd.length > 0 && params != null) {
-      try {
-        const results = calculateAllIndicators(fd, params);
-        theoryPrice = results.period.theoryPrice.value;
-        safetyRateCurrent = results.period.safetyRateCurrent.value;
-      } catch {
-        // 計算失敗時は null のまま
-      }
-    }
-
-    return {
-      ...stock,
-      theoryPrice,
-      safetyRateCurrent,
-      // Database 型の導入によりクエリ結果が型付くため、キャスト不要
-      rosterCategory: stock.roster_category,
-      rating: stock.rating,
-      buyPriority: stock.buy_priority,
-    };
-  });
+  const stocksWithIndicators: StockWithIndicators[] = stocks.map((stock) => ({
+    id: stock.id,
+    stock_code: stock.stock_code,
+    company_name: stock.company_name,
+    market: stock.market,
+    sector: stock.sector,
+    theoryPrice: stock.theoryPrice,
+    safetyRateCurrent: stock.safetyRateCurrent,
+    rosterCategory: stock.roster_category,
+    rating: stock.rating,
+    buyPriority: stock.buy_priority,
+  }));
 
   return (
     <div>

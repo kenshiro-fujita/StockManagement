@@ -9,7 +9,7 @@
  */
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -94,6 +94,28 @@ function fromDisplayValue(displayValue: string, key: GridRowKey): number | null 
 /** グリッドの1列（1年度）分の全セル値（文字列で保持、Input との双方向バインド用） */
 type CellState = Record<GridRowKey, string>;
 
+/**
+ * 1列ぶんのセル状態を計算指標用の GridValues（円換算済み）に変換する。
+ * 指標行 × 列ごとに毎回再構築すると無駄なので、呼び出し側で useMemo して使う
+ */
+function cellsToGridValues(cell: CellState | undefined): GridValues {
+  const v = (key: GridRowKey) => fromDisplayValue(cell?.[key] ?? '', key);
+  return {
+    revenue: v('revenue'),
+    operating_income: v('operating_income'),
+    net_income: v('net_income'),
+    total_assets: v('total_assets'),
+    equity: v('equity'),
+    interest_bearing_debt: v('interest_bearing_debt'),
+    operating_cf: v('operating_cf'),
+    investing_cf: v('investing_cf'),
+    shares_outstanding: v('shares_outstanding'),
+    interest_expense: v('interest_expense'),
+    current_stock_price: v('current_stock_price'),
+    shareholders_equity: v('shareholders_equity'),
+  };
+}
+
 /** FullFinancialDataRow の DB 値をグリッド表示用の文字列に変換する */
 function buildCellState(row: FullFinancialDataRow): CellState {
   const state: Partial<CellState> = {};
@@ -108,23 +130,37 @@ function useColumnResize(initialWidth: number) {
   const [width, setWidth] = useState(initialWidth);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  // ドラッグ中に登録したリスナーを、コンポーネントのアンマウント時にも確実に外せるよう保持する
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     startX.current = e.clientX;
     startWidth.current = width;
 
+    let frame = 0;
     const onMouseMove = (ev: MouseEvent) => {
-      const diff = ev.clientX - startX.current;
-      setWidth(Math.max(80, startWidth.current + diff));
+      // mousemove は高頻度で発火するため requestAnimationFrame でスロットルする
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const diff = ev.clientX - startX.current;
+        setWidth(Math.max(80, startWidth.current + diff));
+      });
     };
-    const onMouseUp = () => {
+    const cleanup = () => {
+      if (frame) cancelAnimationFrame(frame);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mouseup', cleanup);
+      cleanupRef.current = null;
     };
+    cleanupRef.current = cleanup;
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mouseup', cleanup);
   }, [width]);
+
+  // ドラッグ途中でアンマウントされてもリスナーが残らないようにする
+  useEffect(() => () => cleanupRef.current?.(), []);
 
   return { width, onMouseDown };
 }
@@ -194,6 +230,17 @@ export function FinancialDataGrid({
     (rowId: string) => (dirtyCells[rowId]?.size ?? 0) > 0,
     [dirtyCells],
   );
+
+  // 列（年度）ごとの GridValues を cells が変わったときだけ一度構築する。
+  // 以前は指標行 × 列ごとに render 内で再構築しており、1セル入力で
+  // GRID_INDICATORS × 年度数 ぶんの GridValues 構築が毎回走っていた
+  const gridValuesByRow = useMemo(() => {
+    const map = new Map<string, GridValues>();
+    for (const row of sorted) {
+      map.set(row.id, cellsToGridValues(cells[row.id]));
+    }
+    return map;
+  }, [cells, sorted]);
 
   const handleCellChange = useCallback((rowId: string, key: GridRowKey, value: string) => {
     setCells((prev) => ({
@@ -385,26 +432,10 @@ export function FinancialDataGrid({
                   )}
                 </TableCell>
                 {sorted.map((row, colIdx) => {
-                  /** 現在のセル値を GridValues に変換 */
-                  const toGridValues = (id: string): GridValues => ({
-                    revenue: fromDisplayValue(cells[id]?.revenue ?? '', 'revenue'),
-                    operating_income: fromDisplayValue(cells[id]?.operating_income ?? '', 'operating_income'),
-                    net_income: fromDisplayValue(cells[id]?.net_income ?? '', 'net_income'),
-                    total_assets: fromDisplayValue(cells[id]?.total_assets ?? '', 'total_assets'),
-                    equity: fromDisplayValue(cells[id]?.equity ?? '', 'equity'),
-                    interest_bearing_debt: fromDisplayValue(cells[id]?.interest_bearing_debt ?? '', 'interest_bearing_debt'),
-                    operating_cf: fromDisplayValue(cells[id]?.operating_cf ?? '', 'operating_cf'),
-                    investing_cf: fromDisplayValue(cells[id]?.investing_cf ?? '', 'investing_cf'),
-                    shares_outstanding: fromDisplayValue(cells[id]?.shares_outstanding ?? '', 'shares_outstanding'),
-                    interest_expense: fromDisplayValue(cells[id]?.interest_expense ?? '', 'interest_expense'),
-                    current_stock_price: fromDisplayValue(cells[id]?.current_stock_price ?? '', 'current_stock_price'),
-                    shareholders_equity: fromDisplayValue(cells[id]?.shareholders_equity ?? '', 'shareholders_equity'),
-                  });
-
-                  const currentValues = toGridValues(row.id);
+                  const currentValues = gridValuesByRow.get(row.id)!;
                   /** 前年度のデータ（成長率計算用） */
                   const prevRow = colIdx > 0 ? sorted[colIdx - 1] : null;
-                  const prevValues = prevRow ? toGridValues(prevRow.id) : null;
+                  const prevValues = prevRow ? gridValuesByRow.get(prevRow.id) ?? null : null;
 
                   const result = indicator.calc(currentValues, parameters, prevValues);
 

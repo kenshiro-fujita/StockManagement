@@ -11,6 +11,7 @@
  * - 証券コードによる有報検索（日付範囲イテレーション）
  */
 import type { EdinetDocListResponse, EdinetDocument, AnnualReport } from './types';
+import { validateDateRange } from './date-range';
 
 /** EDINET API v2 のベース URL */
 const EDINET_BASE_URL = 'https://api.edinet-fsa.go.jp/api/v2';
@@ -49,13 +50,13 @@ async function fetchWithRetry(
 
       if (res.ok) return res;
 
-      // 401 はリトライしない
+      // 401 はリトライしない（キーが無効なので待っても無駄）
       if (res.status === 401) {
         throw new Error('EDINET APIキーが無効です');
       }
 
-      // 500系はリトライ
-      if (res.status >= 500 && attempt < retries) {
+      // 429（レート制限）と 500系はリトライ対象（時間を置けば回復しうる）
+      if ((res.status === 429 || res.status >= 500) && attempt < retries) {
         await sleep(RETRY_BASE_DELAY_MS * (attempt + 1));
         continue;
       }
@@ -170,11 +171,17 @@ export async function searchAnnualReports(
   endDate: string,
   apiKey: string,
 ): Promise<AnnualReport[]> {
-  const results: AnnualReport[] = [];
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  // 範囲はリソース枯渇を防ぐため必ず検証する（呼び出し側でも検証するが多層防御）
+  const validation = validateDateRange(startDate, endDate);
+  if (!validation.ok) throw new Error(validation.error);
 
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+  const results: AnnualReport[] = [];
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+
+  // 日付の加算・整形は UTC で一貫させる（ローカルタイム混在だと
+  // タイムゾーン境界で1日抜け・重複が起こりうる）
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
     const dateStr = d.toISOString().slice(0, 10);
 
     try {

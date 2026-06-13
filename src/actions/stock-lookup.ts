@@ -1,11 +1,16 @@
 /**
  * 証券コードから企業情報を自動取得する Server Action
  *
- * EDINET の書類一覧 API を使って、指定された証券コードの企業名を逆引きする。
- * 直近30日間の書類一覧を検索し、secCode が一致する書類から企業名を取得する。
+ * 解決順:
+ * 1. edinet_master テーブルを逆引き（即座に返る。バッチ取得済みなら API 不要）
+ * 2. 見つからなければ EDINET の書類一覧 API を直近 LOOKUP_DAYS 日ぶん検索
+ *
+ * 以前は常に API を直近30日ぶん直列ループ（各3秒スリープ）しており、
+ * 見つからない場合は最悪90秒以上ブロックして Server Action がタイムアウトしていた。
  */
 'use server';
 
+import { createClient } from '@/lib/supabase/server';
 import { fetchDocumentList } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 
@@ -15,30 +20,56 @@ export type StockLookupResult = {
   secCode: string;
 };
 
+/** API フォールバック時に遡る日数（タイムアウトを避けるため短めにする） */
+const LOOKUP_DAYS = 7;
+/** EDINET のレート制限対策の待機（ミリ秒） */
+const RATE_LIMIT_DELAY_MS = 3000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function lookupStockByCode(
   stockCode: string,
 ): Promise<{ success: boolean; error?: string; data?: StockLookupResult }> {
-  if (!stockCode || stockCode.length !== 4) {
-    return { success: false, error: '4桁の証券コードを入力してください' };
+  if (!/^\d{4}$/.test(stockCode)) {
+    return { success: false, error: '4桁の証券コードで入力してください' };
   }
 
-  try {
-    // user_settings → 環境変数 の順で解決（env 直チェックだと設定画面で登録した
-    // キーを持つユーザーを誤ってブロックしてしまうため、共通の解決ロジックを使う）
-    const apiKey = await resolveEdinetApiKey();
+  // まずマスタを逆引きする（バッチ取得済みなら API を叩かず即座に返る）
+  const supabase = await createClient();
+  const secCode5 = `${stockCode}0`;
+  const { data: master } = await supabase
+    .from('edinet_master')
+    .select('filer_name, edinet_code, sec_code')
+    .eq('sec_code', secCode5)
+    .order('fiscal_year', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-    // 直近30日分を検索（有報以外の書類にも企業名が含まれる）
+  if (master) {
+    return {
+      success: true,
+      data: {
+        companyName: master.filer_name,
+        edinetCode: master.edinet_code,
+        secCode: master.sec_code,
+      },
+    };
+  }
+
+  // マスタに無ければ API フォールバック（直近 LOOKUP_DAYS 日のみ）
+  try {
+    const apiKey = await resolveEdinetApiKey();
     const today = new Date();
-    for (let i = 0; i < 30; i++) {
+
+    for (let i = 0; i < LOOKUP_DAYS; i++) {
       const d = new Date(today);
-      d.setDate(d.getDate() - i);
+      d.setUTCDate(d.getUTCDate() - i);
       const dateStr = d.toISOString().slice(0, 10);
 
       const response = await fetchDocumentList(dateStr, apiKey);
-      if (!response.results) continue;
-
-      // secCode の先頭4桁で照合
-      const match = response.results.find(
+      const match = response.results?.find(
         (doc) => doc.secCode && doc.secCode.slice(0, 4) === stockCode && doc.filerName,
       );
 
@@ -53,8 +84,8 @@ export async function lookupStockByCode(
         };
       }
 
-      // レート制限: 3秒待つ
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // 最終ループ後は待たない（無駄な待機を避ける）
+      if (i < LOOKUP_DAYS - 1) await sleep(RATE_LIMIT_DELAY_MS);
     }
 
     return { success: false, error: `証券コード ${stockCode} の企業が見つかりませんでした` };

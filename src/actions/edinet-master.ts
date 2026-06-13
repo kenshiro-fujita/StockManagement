@@ -78,37 +78,35 @@ export async function registerMasterMetadata(
     if (!response.results) return { success: true, registered: 0, total: 0 };
 
     const reports = filterAnnualReports(response.results);
-    let registered = 0;
+    if (reports.length === 0) return { success: true, registered: 0, total: 0 };
 
-    for (const report of reports) {
-      const { data: existing } = await supabase
-        .from('edinet_master')
-        .select('id')
-        .eq('doc_id', report.docID)
-        .maybeSingle();
-
-      if (existing) continue;
-
-      const fiscalYear = report.periodEnd
+    // 書類ごとに SELECT+INSERT を直列で回すと N+1 になる（1日50件なら100往復）。
+    // doc_id のユニーク制約を利用し、ignoreDuplicates で一括 upsert する
+    const rows = reports.map((report) => ({
+      doc_id: report.docID,
+      sec_code: report.secCode,
+      edinet_code: report.edinetCode,
+      filer_name: report.filerName,
+      doc_description: report.docDescription,
+      period_start: report.periodStart,
+      period_end: report.periodEnd,
+      fiscal_year: report.periodEnd
         ? new Date(report.periodEnd).getFullYear()
-        : new Date(date).getFullYear();
+        : new Date(`${date}T00:00:00Z`).getUTCFullYear(),
+      extraction_status: 'pending',
+    }));
 
-      const { error: insertError } = await supabase.from('edinet_master').insert({
-        doc_id: report.docID,
-        sec_code: report.secCode,
-        edinet_code: report.edinetCode,
-        filer_name: report.filerName,
-        doc_description: report.docDescription,
-        period_start: report.periodStart,
-        period_end: report.periodEnd,
-        fiscal_year: fiscalYear,
-        extraction_status: 'pending',
-      });
+    const { data: inserted, error: upsertError } = await supabase
+      .from('edinet_master')
+      .upsert(rows, { onConflict: 'doc_id', ignoreDuplicates: true })
+      .select('id');
 
-      if (!insertError) registered++;
+    if (upsertError) {
+      return { success: false, error: 'マスタの登録に失敗しました', registered: 0, total: reports.length };
     }
 
-    return { success: true, registered, total: reports.length };
+    // ignoreDuplicates のため、新規登録された行数は返ってきた行数
+    return { success: true, registered: inserted?.length ?? 0, total: reports.length };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'メタデータ取得に失敗しました';
     return { success: false, error: message, registered: 0, total: 0 };

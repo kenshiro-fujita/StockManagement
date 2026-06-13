@@ -12,19 +12,21 @@ import { AppSidebar, type SidebarStock } from '@/components/layout/app-sidebar';
 import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
 import { redirect } from 'next/navigation';
+import { getStocksWithIndicators } from '@/lib/stocks/stocks-with-indicators';
 
 async function SidebarWithStocks() {
   await connection();
-  const supabase = await createClient();
-  const { data: stocks } = await supabase
-    .from('stocks')
-    .select('id, stock_code, company_name, roster_category')
-    .order('created_at', { ascending: false });
+  // /stocks と同じ共有関数を使う。以前は roster_category と理論株価を
+  // null で捨てており、/settings に移るとサイドバーのロースター表示と
+  // 理論株価が消える画面間の不整合があった
+  const stocks = await getStocksWithIndicators();
 
-  const sidebarStocks: SidebarStock[] = (stocks ?? []).map((stock) => ({
-    ...stock,
-    theoryPrice: null,
-    rosterCategory: null,
+  const sidebarStocks: SidebarStock[] = stocks.map((stock) => ({
+    id: stock.id,
+    stock_code: stock.stock_code,
+    company_name: stock.company_name,
+    theoryPrice: stock.theoryPrice,
+    rosterCategory: stock.roster_category,
   }));
 
   return <AppSidebar stocks={sidebarStocks} />;

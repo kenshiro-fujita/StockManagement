@@ -14,29 +14,40 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { registerMasterMetadata, getPendingMasterRecords, extractSingleMasterRecord } from '@/actions/edinet-master';
+import { validateDateRange } from '@/lib/edinet/date-range';
+
+/** ローカルタイム基準の今日（UTCだとJSTの朝に「昨日」がデフォルトになるのを避ける） */
+function localToday(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toLocaleDateString('sv-SE'); // sv-SE ロケールは YYYY-MM-DD 形式
+}
 
 export function EdinetBatchSection() {
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().slice(0, 10);
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => localToday(-7));
+  const [endDate, setEndDate] = useState(() => localToday());
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
 
   const handleRun = async () => {
+    // 開始>終了・不正日付・範囲超過をガードする（最大6か月）
+    const range = validateDateRange(startDate, endDate);
+    if (!range.ok) {
+      toast.error(range.error);
+      return;
+    }
+
     setIsRunning(true);
 
     // --- Step 1: メタデータ登録（高速） ---
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDays = range.days;
+    const start = new Date(`${startDate}T00:00:00Z`);
     let totalRegistered = 0;
 
     for (let i = 0; i < totalDays; i++) {
+      // 日付の加算・整形は UTC で一貫させる
       const d = new Date(start);
-      d.setDate(d.getDate() + i);
+      d.setUTCDate(d.getUTCDate() + i);
       const dateStr = d.toISOString().slice(0, 10);
       setProgress(`Step 1/2: ${dateStr} の書類一覧を取得中... (${i + 1}/${totalDays}日)`);
 

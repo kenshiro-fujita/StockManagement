@@ -15,6 +15,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidateStockPaths } from '@/lib/revalidate';
 import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
+import { validateDateRange } from '@/lib/edinet/date-range';
 import { extractionToFinancialColumns } from '@/lib/edinet/extraction-to-row';
 import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
@@ -34,6 +35,15 @@ export async function searchEdinetDocuments(
 
   if (!user) {
     return { success: false, error: '認証が必要です' };
+  }
+
+  // 入力検証（証券コードは4桁、日付範囲は最大6か月）
+  if (!/^\d{4}$/.test(stockCode)) {
+    return { success: false, error: '証券コードは4桁の数字で入力してください' };
+  }
+  const range = validateDateRange(startDate, endDate);
+  if (!range.ok) {
+    return { success: false, error: range.error };
   }
 
   try {

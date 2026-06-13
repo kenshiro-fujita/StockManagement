@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import {
   updateParametersSchema,
+  PARAMETER_DEFAULTS,
   type UpdateParametersInput,
 } from '@/lib/schemas/parameters';
 import type { ParametersRow } from '@/lib/types/parameters';
@@ -33,10 +34,11 @@ export async function getOrCreateParameters(
     return { success: true, data: toParametersRow(existing) };
   }
 
-  // Create with defaults (DB column defaults handle the values)
+  // デフォルト値は PARAMETER_DEFAULTS（単一の真実の源）を明示的に渡す。
+  // DB カラムデフォルト任せにすると、将来 DB 側がズレたとき気付けない
   const { data: created, error } = await supabase
     .from('parameters')
-    .insert({ user_id: user.id, stock_id: stockId })
+    .insert({ user_id: user.id, stock_id: stockId, ...PARAMETER_DEFAULTS })
     .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
     .single();
 

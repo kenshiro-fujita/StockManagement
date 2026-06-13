@@ -12,13 +12,17 @@ import { RosterSection } from '@/components/stocks/roster-section';
 import { StarRating } from '@/components/stocks/star-rating';
 import { BuyPriorityInput } from '@/components/stocks/buy-priority-input';
 import { createClient } from '@/lib/supabase/server';
+import { getOrCreateParameters } from '@/actions/parameters';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   await connection();
   const supabase = await createClient();
 
-  const [{ data: stock }, { data: financialData }, { data: parametersData }] = await Promise.all([
+  // パラメータはサーバー側で get-or-create する。
+  // 以前はクライアントの useEffect で初期化しており、パラメータ未作成の銘柄で
+  // 「ページ取得 → マウント → さらに API 呼び出し」のウォーターフォールが発生していた
+  const [{ data: stock }, { data: financialData }, paramsResult] = await Promise.all([
     supabase
       .from('stocks')
       .select('id, stock_code, company_name, market, sector, business_segment, business_description, roster_category, rating, buy_priority')
@@ -31,11 +35,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       )
       .eq('stock_id', id)
       .order('fiscal_year', { ascending: false }),
-    supabase
-      .from('parameters')
-      .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
-      .eq('stock_id', id)
-      .maybeSingle(),
+    getOrCreateParameters(id),
   ]);
 
   if (!stock) notFound();
@@ -55,17 +55,9 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       (QUARTER_ORDER[b.fiscal_quarter] ?? 99);
   });
 
-  // Convert NUMERIC (string from Supabase) to number, or null if not yet created
-  const initialParameters = parametersData
-    ? {
-        id: parametersData.id,
-        stock_id: parametersData.stock_id,
-        discount_rate: Number(parametersData.discount_rate),
-        growth_rate: Number(parametersData.growth_rate),
-        tax_rate: Number(parametersData.tax_rate),
-        cap_multiplier: Number(parametersData.cap_multiplier),
-      }
-    : null;
+  // get-or-create 済み（NUMERIC→number 変換も action 内で完了）。
+  // 失敗時のみ null になり、その場合は ParameterSection 側でフォールバック取得する
+  const initialParameters = paramsResult.success ? (paramsResult.data ?? null) : null;
 
   const overviewContent = (
     <div className="space-y-6">
