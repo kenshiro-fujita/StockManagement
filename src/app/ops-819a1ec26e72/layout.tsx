@@ -4,23 +4,31 @@
  * admin ロールを持つユーザーのみアクセス可能。
  * 一般ユーザーがアクセスした場合は 404 を返す（管理画面の存在を隠す）。
  */
+import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { isAdmin } from '@/lib/auth/admin';
 import { connection } from 'next/server';
 import Link from 'next/link';
 import { Shield } from 'lucide-react';
 
-export default async function AdminLayout({
+/**
+ * 管理者ゲート。isAdmin() は cookie（未キャッシュ）を読むため、
+ * Cache Components モードでは Suspense の内側で実行する必要がある。
+ * レイアウト本体で直接 await すると、配下の静的ページのプリレンダリングが
+ * ドキュメント全体ブロッキングになりビルドが失敗する。
+ */
+async function AdminGate({ children }: { children: React.ReactNode }) {
+  await connection();
+  const admin = await isAdmin();
+  if (!admin) notFound();
+  return <>{children}</>;
+}
+
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await connection();
-  const admin = await isAdmin();
-
-  // 管理者でない場合は 404（管理画面の存在を隠す）
-  if (!admin) notFound();
-
   return (
     <div className="min-h-screen bg-background">
       {/* 管理画面ヘッダー */}
@@ -47,9 +55,11 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      {/* メインコンテンツ */}
+      {/* メインコンテンツ（認証ゲートを Suspense 境界の内側で実行） */}
       <main className="mx-auto max-w-6xl p-6">
-        {children}
+        <Suspense fallback={null}>
+          <AdminGate>{children}</AdminGate>
+        </Suspense>
       </main>
     </div>
   );

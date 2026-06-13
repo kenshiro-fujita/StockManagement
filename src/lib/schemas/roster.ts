@@ -38,7 +38,7 @@ export const ROSTER_BADGE_STYLES: Record<RosterCategory, RosterBadgeStyle> = {
 };
 
 export const updateRosterSchema = z.object({
-  stock_id: z.string().uuid('銘柄IDが不正です'),
+  stock_id: z.uuid('銘柄IDが不正です'),
   category: z.enum(ROSTER_CATEGORIES, {
     error: 'カテゴリを選択してください',
   }),
@@ -51,14 +51,14 @@ export const updateRosterSchema = z.object({
 export type UpdateRosterInput = z.infer<typeof updateRosterSchema>;
 
 export const updateRatingSchema = z.object({
-  stock_id: z.string().uuid('銘柄IDが不正です'),
+  stock_id: z.uuid('銘柄IDが不正です'),
   rating: z.number().int().min(1, '1以上を指定してください').max(5, '5以下を指定してください'),
 });
 
 export type UpdateRatingInput = z.infer<typeof updateRatingSchema>;
 
 export const updateBuyPrioritySchema = z.object({
-  stock_id: z.string().uuid('銘柄IDが不正です'),
+  stock_id: z.uuid('銘柄IDが不正です'),
   buy_priority: z.number().int().min(1, '1以上を指定してください').nullable(),
 });
 

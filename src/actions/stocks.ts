@@ -1,5 +1,6 @@
 'use server';
 
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import {
@@ -94,6 +95,7 @@ export async function updateStock(
       business_segment: parsed.data.business_segment || null,
     })
     .eq('id', parsed.data.id)
+    .eq('user_id', user.id) // RLS と二重で所有権を担保（多層防御）
     .select('id');
 
   if (error?.code === '23505') {
@@ -113,7 +115,8 @@ export async function updateStock(
 export async function deleteStock(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
-  if (!id) {
+  // 他アクションと揃えて UUID 形式を検証する
+  if (!z.uuid().safeParse(id).success) {
     return { success: false, error: '無効なIDです' };
   }
 
@@ -126,7 +129,11 @@ export async function deleteStock(
     return { success: false, error: '認証が必要です' };
   }
 
-  const { error } = await supabase.from('stocks').delete().eq('id', id);
+  const { error } = await supabase
+    .from('stocks')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', user.id); // RLS と二重で所有権を担保（多層防御）
 
   if (error) {
     return { success: false, error: '銘柄の削除に失敗しました' };

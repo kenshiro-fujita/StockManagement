@@ -1,5 +1,7 @@
 /**
  * 管理画面: EDINET バッチ取得ページ
+ *
+ * 認証ゲート（cookie アクセス）はレイアウトの AdminGate が Suspense 内で行う。
  */
 import { EdinetBatchSection } from '@/components/settings/edinet-batch';
 

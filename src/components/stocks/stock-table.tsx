@@ -15,7 +15,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatStockPrice, formatPercent, NULL_DISPLAY } from '@/lib/format';
-import { getValuationLevel } from '@/lib/calc/safety';
+import { getValuationLevel, VALUATION_LEVEL_LABELS } from '@/lib/calc/safety';
 import type { RosterCategory } from '@/lib/types/roster';
 import {
   ROSTER_CATEGORY_LABELS,
@@ -153,7 +153,9 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 </TableCell>
                 <TableCell className="text-center">
                   {stock.rating != null ? (
-                    <span className="text-yellow-500">{'★'.repeat(stock.rating)}</span>
+                    <span className="text-yellow-500" aria-label={`評価 ${stock.rating}/5`}>
+                      <span aria-hidden="true">{'★'.repeat(stock.rating)}</span>
+                    </span>
                   ) : (
                     <span className="text-muted-foreground">{NULL_DISPLAY}</span>
                   )}
@@ -165,7 +167,15 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                   {formatStockPrice(stock.theoryPrice)}
                 </TableCell>
                 <TableCell className={`tabular-nums text-right ${safetyColorClass || 'text-muted-foreground'}`}>
-                  {stock.safetyRateCurrent != null ? formatPercent(stock.safetyRateCurrent) : NULL_DISPLAY}
+                  {stock.safetyRateCurrent != null ? (
+                    <>
+                      {formatPercent(stock.safetyRateCurrent)}
+                      {/* 色のみで割安/割高を伝えないよう、レベル名をSR向けに併記（WCAG 1.4.1） */}
+                      {level && <span className="sr-only">（{VALUATION_LEVEL_LABELS[level]}）</span>}
+                    </>
+                  ) : (
+                    NULL_DISPLAY
+                  )}
                 </TableCell>
               </TableRow>
             );

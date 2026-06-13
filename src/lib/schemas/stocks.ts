@@ -1,11 +1,15 @@
 import { z } from 'zod';
 
 export const createStockSchema = z.object({
+  // 証券コードは英数字のみ許可する。
+  // 4桁数字に限定しないのは、2024年以降の新規上場で英字入りコード（例「130A」）が
+  // 使われるため。文字種だけ制限して想定外入力（記号等）を弾く
   stock_code: z
     .string()
     .trim()
     .min(1, '銘柄コードを入力してください')
-    .max(10, '銘柄コードは10文字以内で入力してください'),
+    .max(10, '銘柄コードは10文字以内で入力してください')
+    .regex(/^[0-9A-Za-z]+$/, '銘柄コードは英数字で入力してください'),
   company_name: z
     .string()
     .trim()

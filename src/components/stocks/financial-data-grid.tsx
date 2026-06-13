@@ -390,18 +390,22 @@ export function FinancialDataGrid({
           <TableBody>
             {GRID_ROWS.map((gridRow) => (
               <TableRow key={gridRow.key}>
-                <TableCell className="sticky left-0 z-10 bg-background text-sm font-medium">
+                {/* 項目名は行ヘッダー（th scope="row"）にして、スクリーンリーダーが
+                    各セルを「年度 × 項目名」で読み上げられるようにする */}
+                <TableHead scope="row" className="sticky left-0 z-10 bg-background text-sm font-medium text-foreground">
                   <div className="flex items-center gap-1">
                     {gridRow.label}
                     {gridRow.required && <span className="text-destructive">*</span>}
                     <span className="text-xs text-muted-foreground ml-1">({gridRow.unit})</span>
                   </div>
-                </TableCell>
+                </TableHead>
                 {sorted.map((row) => (
                   <TableCell key={row.id} className="p-1">
                     <Input
                       type="text"
                       inputMode="numeric"
+                      // 無名の入力欄が並ぶとSRで何の値か分からないため、年度×項目名を付与
+                      aria-label={`${row.fiscal_year}年度 ${gridRow.label}（${gridRow.unit || '数値'}）`}
                       value={cells[row.id]?.[gridRow.key] ?? ''}
                       onChange={(e) => handleCellChange(row.id, gridRow.key, e.target.value)}
                       className={`w-full text-right tabular-nums text-sm h-8 grid-cell-input ${

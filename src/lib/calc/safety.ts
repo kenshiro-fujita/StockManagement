@@ -85,6 +85,17 @@ export function getValuationLevel(safetyRateValue: number | null): ValuationLeve
 }
 
 /**
+ * 割安/適正/割高の日本語ラベル。
+ * 色だけで割安・割高を伝えると WCAG 1.4.1 違反になるため、
+ * テキスト併記やスクリーンリーダー向けラベルにこのマップを使う
+ */
+export const VALUATION_LEVEL_LABELS: Record<ValuationLevel, string> = {
+  cheap: '割安',
+  fair: '適正',
+  expensive: '割高',
+};
+
+/**
  * 理想購入株価 = 理論株価 × 割引係数（デフォルト0.5＝半値）
  *
  * 理論株価が 0 以下の場合は「買うべき価格が存在しない」ため算出不可（null）。

@@ -59,11 +59,12 @@ export async function updateRosterCategory(
     return { success: false, error: '同じカテゴリです' };
   }
 
-  // stocks テーブルの roster_category を更新
+  // stocks テーブルの roster_category を更新（RLS と二重で所有権を担保）
   const { error: updateError } = await supabase
     .from('stocks')
     .update({ roster_category: parsed.data.category })
-    .eq('id', parsed.data.stock_id);
+    .eq('id', parsed.data.stock_id)
+    .eq('user_id', user.id);
 
   if (updateError) {
     return { success: false, error: '分類の更新に失敗しました' };
@@ -108,7 +109,8 @@ export async function updateStockRating(
   const { error } = await supabase
     .from('stocks')
     .update({ rating: parsed.data.rating })
-    .eq('id', parsed.data.stock_id);
+    .eq('id', parsed.data.stock_id)
+    .eq('user_id', user.id);
 
   if (error) {
     return { success: false, error: '評価の更新に失敗しました' };
@@ -139,7 +141,8 @@ export async function updateBuyPriority(
   const { error } = await supabase
     .from('stocks')
     .update({ buy_priority: parsed.data.buy_priority })
-    .eq('id', parsed.data.stock_id);
+    .eq('id', parsed.data.stock_id)
+    .eq('user_id', user.id);
 
   if (error) {
     return { success: false, error: '優先順の更新に失敗しました' };
