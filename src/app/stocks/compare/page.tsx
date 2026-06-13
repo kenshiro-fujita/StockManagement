@@ -9,7 +9,6 @@ import { connection } from 'next/server';
 import { calculateAllIndicators } from '@/lib/calc';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { ParametersRow } from '@/lib/types/parameters';
-import type { RosterCategory } from '@/lib/types/roster';
 import type { IndicatorResults } from '@/lib/types/calc';
 
 function CompareEmpty() {
@@ -67,15 +66,15 @@ async function ComparisonContent({
   const financialByStock = new Map<string, FullFinancialDataRow[]>();
   for (const fd of allFinancialData ?? []) {
     const list = financialByStock.get(fd.stock_id) ?? [];
-    list.push(fd as FullFinancialDataRow);
+    list.push(fd);
     financialByStock.set(fd.stock_id, list);
   }
 
   const paramsByStock = new Map<string, ParametersRow>();
   for (const p of allParameters ?? []) {
-    paramsByStock.set(p.stock_id as string, {
-      id: p.id as string,
-      stock_id: p.stock_id as string,
+    paramsByStock.set(p.stock_id, {
+      id: p.id,
+      stock_id: p.stock_id,
       discount_rate: Number(p.discount_rate),
       growth_rate: Number(p.growth_rate),
       tax_rate: Number(p.tax_rate),
@@ -105,9 +104,10 @@ async function ComparisonContent({
       id: stock.id,
       stock_code: stock.stock_code,
       company_name: stock.company_name,
-      rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
-      rating: (stock.rating as number | null) ?? null,
-      buyPriority: (stock.buy_priority as number | null) ?? null,
+      // Database 型の導入によりクエリ結果が型付くため、キャスト不要
+      rosterCategory: stock.roster_category,
+      rating: stock.rating,
+      buyPriority: stock.buy_priority,
       results,
     };
   });

@@ -72,11 +72,10 @@ export function EdinetBatchSection() {
     toast.success(`完了: ${totalRegistered}件登録、${extracted}件の財務データを抽出しました`);
   };
 
-  /** 検索範囲の日数と推定時間 */
+  /** 検索範囲の日数（表示用） */
   const days = Math.max(0, Math.ceil(
     (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
   )) + 1;
-  const estimatedMinutes = Math.ceil(days * 0.1) + 1; // Step 1 は高速
 
   return (
     <section className="space-y-4">

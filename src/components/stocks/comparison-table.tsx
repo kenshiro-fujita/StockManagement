@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import {
@@ -141,10 +142,12 @@ export function ComparisonTable({
             ))}
           </TableRow>
 
-          {/* カテゴリごとの指標行 */}
+          {/* カテゴリごとの指標行。
+              map のトップレベル要素に key が必要なので短縮形 <> ではなく
+              Fragment を使う（短縮形は key を受け取れず、差分計算が崩れて全行再マウントになる） */}
           {COMPARISON_CATEGORIES.map((category) => (
-            <>
-              <TableRow key={`header-${category.title}`}>
+            <Fragment key={category.title}>
+              <TableRow>
                 <TableCell
                   colSpan={stocks.length + 1}
                   className="sticky left-0 z-10 bg-muted/50 font-semibold text-sm"
@@ -173,7 +176,7 @@ export function ComparisonTable({
                   </TableRow>
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </TableBody>
       </Table>

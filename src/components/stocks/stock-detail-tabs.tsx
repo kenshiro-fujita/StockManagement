@@ -37,25 +37,31 @@ export function StockDetailTabs({
         {edinetContent && <TabsTrigger value="edinet">EDINET</TabsTrigger>}
         {aiResearchContent && <TabsTrigger value="ai-research">AI調査</TabsTrigger>}
       </TabsList>
-      <TabsContent value="overview" className="mt-4">
+      {/*
+        forceMount + hidden で非アクティブタブも DOM に保持する。
+        Radix Tabs のデフォルト（非アクティブをアンマウント）だと、
+        財務グリッドの未保存編集がタブ切替で警告なく全て消え、
+        EDINET検索・AI調査もタブを開くたびに再フェッチされてしまう
+      */}
+      <TabsContent forceMount value="overview" className="mt-4 data-[state=inactive]:hidden">
         {overviewContent}
       </TabsContent>
-      <TabsContent value="theory-price" className="mt-4">
+      <TabsContent forceMount value="theory-price" className="mt-4 data-[state=inactive]:hidden">
         {theoryPriceContent}
       </TabsContent>
-      <TabsContent value="financial" className="mt-4">
+      <TabsContent forceMount value="financial" className="mt-4 data-[state=inactive]:hidden">
         {financialContent}
       </TabsContent>
-      <TabsContent value="parameters" className="mt-4">
+      <TabsContent forceMount value="parameters" className="mt-4 data-[state=inactive]:hidden">
         {parametersContent}
       </TabsContent>
       {edinetContent && (
-        <TabsContent value="edinet" className="mt-4">
+        <TabsContent forceMount value="edinet" className="mt-4 data-[state=inactive]:hidden">
           {edinetContent}
         </TabsContent>
       )}
       {aiResearchContent && (
-        <TabsContent value="ai-research" className="mt-4">
+        <TabsContent forceMount value="ai-research" className="mt-4 data-[state=inactive]:hidden">
           {aiResearchContent}
         </TabsContent>
       )}

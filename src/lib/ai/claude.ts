@@ -11,6 +11,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIProvider, AIResearchRequest, AIResearchResponse } from './provider';
+import { AIProviderError } from './errors';
 
 /** Claude に送るシステムプロンプト */
 const SYSTEM_PROMPT = `あなたは日本の上場企業を調査するリサーチアナリストです。
@@ -92,15 +93,44 @@ export class ClaudeProvider implements AIProvider {
     return this.client;
   }
 
+  /**
+   * Anthropic SDK の例外をプロバイダ非依存の AIProviderError に正規化する。
+   * メッセージ文言の includes() 判定は SDK 更新で静かに壊れるため、
+   * 可能な限り SDK の型付き例外クラスで instanceof 判定する
+   */
+  private normalizeError(error: unknown): AIProviderError {
+    if (error instanceof Anthropic.AuthenticationError) {
+      return new AIProviderError('auth', 'APIキーが無効です', { cause: error });
+    }
+    if (error instanceof Anthropic.RateLimitError) {
+      return new AIProviderError('rate_limit', 'レート制限に達しました', { cause: error });
+    }
+    // クレジット不足は専用の例外クラスがなく 400 で返るため、ここだけ文言で判定する
+    if (
+      error instanceof Anthropic.APIError &&
+      String(error.message).includes('credit balance is too low')
+    ) {
+      return new AIProviderError('insufficient_credit', 'クレジット残高が不足しています', {
+        cause: error,
+      });
+    }
+    return new AIProviderError('unknown', 'AI調査に失敗しました', { cause: error });
+  }
+
   async research(request: AIResearchRequest): Promise<AIResearchResponse> {
-    const message = await this.getClient().messages.create({
-      model: this.model,
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [
-        { role: 'user', content: buildUserPrompt(request) },
-      ],
-    });
+    let message: Anthropic.Message;
+    try {
+      message = await this.getClient().messages.create({
+        model: this.model,
+        max_tokens: 2048,
+        system: SYSTEM_PROMPT,
+        messages: [
+          { role: 'user', content: buildUserPrompt(request) },
+        ],
+      });
+    } catch (error) {
+      throw this.normalizeError(error);
+    }
 
     const text = message.content
       .filter((block) => block.type === 'text')

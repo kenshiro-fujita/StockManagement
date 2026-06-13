@@ -14,14 +14,18 @@ export function BuyPriorityInput({
 }) {
   const [isPending, setIsPending] = useState(false);
   const [value, setValue] = useState(currentPriority?.toString() ?? '');
+  // 「保存済みの値」はローカルで追跡する。props の currentPriority と比較すると、
+  // revalidate 前の古い props に対して「2に変更→1に戻す」が no-op 扱いになり、
+  // DB は 2 のまま UI は 1 という乖離が起きる
+  const [savedPriority, setSavedPriority] = useState(currentPriority);
 
   const handleBlur = async () => {
     const numValue = value === '' ? null : parseInt(value, 10);
 
-    if (numValue === currentPriority) return;
+    if (numValue === savedPriority) return;
     if (numValue !== null && (isNaN(numValue) || numValue < 1)) {
       toast.error('1以上の整数を入力してください');
-      setValue(currentPriority?.toString() ?? '');
+      setValue(savedPriority?.toString() ?? '');
       return;
     }
 
@@ -32,9 +36,11 @@ export function BuyPriorityInput({
     });
     setIsPending(false);
 
-    if (!result.success) {
+    if (result.success) {
+      setSavedPriority(numValue);
+    } else {
       toast.error(result.error ?? '優先順の更新に失敗しました');
-      setValue(currentPriority?.toString() ?? '');
+      setValue(savedPriority?.toString() ?? '');
     }
   };
 

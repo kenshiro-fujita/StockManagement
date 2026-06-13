@@ -42,22 +42,23 @@ function ApiKeyField({
     }
   };
 
-  const maskedValue = value ? '•'.repeat(Math.min(value.length, 20)) + value.slice(-4) : '';
+  // 入力欄には常に実値をバインドし、マスキングは type="password" のネイティブ機能に任せる。
+  // 以前は非表示時にマスク文字列（••••1234）を value にバインドしており、
+  // 非表示状態で入力イベントが起こるとマスク文字込みの値が実値として保存され
+  // APIキーが静かに壊れる事故があった
+  const inputId = `api-key-${settingKey}`;
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium">{label}</label>
+      <label htmlFor={inputId} className="text-sm font-medium">{label}</label>
       <p className="text-xs text-muted-foreground">{description}</p>
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Input
+            id={inputId}
             type={isVisible ? 'text' : 'password'}
-            value={isVisible ? value : maskedValue}
-            onChange={(e) => {
-              setValue(e.target.value);
-              if (!isVisible) setIsVisible(true);
-            }}
-            onFocus={() => setIsVisible(true)}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
             placeholder={placeholder}
             className="pr-10 font-mono text-sm"
           />
@@ -98,9 +99,11 @@ function PasswordChangeSection() {
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-sm font-medium">新しいパスワード</label>
+        <label htmlFor="new-password" className="text-sm font-medium">新しいパスワード</label>
         <Input
+          id="new-password"
           type="password"
+          autoComplete="new-password"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           placeholder="8文字以上"
@@ -153,23 +156,23 @@ function UserProfileSection({
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-sm font-medium">ユーザーID</label>
-        <Input value={userId} disabled className="mt-1 font-mono text-xs opacity-60" />
+        <label htmlFor="profile-user-id" className="text-sm font-medium">ユーザーID</label>
+        <Input id="profile-user-id" value={userId} disabled className="mt-1 font-mono text-xs opacity-60" />
         <p className="text-xs text-muted-foreground mt-1">変更できません</p>
       </div>
       <div>
-        <label className="text-sm font-medium">表示名</label>
+        <label htmlFor="profile-display-name" className="text-sm font-medium">表示名</label>
         <div className="flex gap-2 mt-1">
-          <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="表示名を入力" />
+          <Input id="profile-display-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="表示名を入力" />
           <Button onClick={handleSaveName} disabled={isSavingName} size="sm">
             {isSavingName ? '保存中...' : '保存'}
           </Button>
         </div>
       </div>
       <div>
-        <label className="text-sm font-medium">メールアドレス</label>
+        <label htmlFor="profile-email" className="text-sm font-medium">メールアドレス</label>
         <div className="flex gap-2 mt-1">
-          <Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+          <Input id="profile-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
           <Button onClick={handleSaveEmail} disabled={isSavingEmail || newEmail === email} size="sm" variant="outline">
             {isSavingEmail ? '送信中...' : '変更'}
           </Button>

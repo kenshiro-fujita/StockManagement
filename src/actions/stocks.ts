@@ -48,6 +48,9 @@ export async function createStock(
   // ここにハードコードすると DB デフォルト・UI 表示と食い違い、
   // 銘柄の作成経路によって理論株価が変わるバグになる（過去に cap_multiplier 20 vs 10 で発生）
   const { error: paramsError } = await supabase.from('parameters').insert({
+    // user_id は NOT NULL かつ RLS の WITH CHECK 対象。
+    // 従来は欠落しており insert が常に失敗していた（Database 型の導入で発覚）
+    user_id: user.id,
     stock_id: newStock.id,
     ...PARAMETER_DEFAULTS,
   });

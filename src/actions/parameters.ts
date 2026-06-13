@@ -7,6 +7,7 @@ import {
   type UpdateParametersInput,
 } from '@/lib/schemas/parameters';
 import type { ParametersRow } from '@/lib/types/parameters';
+import type { Tables } from '@/lib/types/database';
 
 export async function getOrCreateParameters(
   stockId: string
@@ -101,10 +102,16 @@ export async function updateParameters(
 }
 
 /** Convert Supabase NUMERIC (string) to JavaScript number */
-function toParametersRow(row: Record<string, unknown>): ParametersRow {
+function toParametersRow(
+  // Database 型の導入によりクエリ結果が型付くため、SELECT したカラムの Pick で受ける
+  row: Pick<
+    Tables<'parameters'>,
+    'id' | 'stock_id' | 'discount_rate' | 'growth_rate' | 'tax_rate' | 'cap_multiplier'
+  >,
+): ParametersRow {
   return {
-    id: row.id as string,
-    stock_id: row.stock_id as string,
+    id: row.id,
+    stock_id: row.stock_id,
     discount_rate: Number(row.discount_rate),
     growth_rate: Number(row.growth_rate),
     tax_rate: Number(row.tax_rate),

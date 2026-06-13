@@ -10,8 +10,9 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { revalidateStockPaths } from '@/lib/revalidate';
 import { getAIProvider, type AIResearchResponse } from '@/lib/ai';
+import { AIProviderError } from '@/lib/ai/errors';
 
 /**
  * 金額（円）を「N百万円」形式に整形する。
@@ -84,8 +85,10 @@ export async function runAIResearch(
       financialSummary,
     });
 
-    // DB に保存
-    await supabase.from('ai_research').insert({
+    // DB に保存。AI 呼び出しは課金済みなので、保存失敗を success: true で
+    // 握り潰すと「結果が見えたのに次回開いたら消えている」という不可解な挙動になる。
+    // 失敗は明示的にユーザーへ返す（結果自体は data で返すので画面には表示できる）
+    const { error: insertError } = await supabase.from('ai_research').insert({
       user_id: user.id,
       stock_id: stockId,
       business_overview: result.businessOverview,
@@ -96,29 +99,44 @@ export async function runAIResearch(
       researched_at: result.researchedAt,
     });
 
-    // business_description も更新（概要タブに表示するため）
-    await supabase
+    if (insertError) {
+      console.error('ai_research insert failed:', insertError);
+      return {
+        success: false,
+        error: '調査は完了しましたが結果の保存に失敗しました。再度お試しください。',
+        data: result,
+      };
+    }
+
+    // business_description も更新（概要タブに表示するため）。
+    // 派生的な表示用コピーなので、失敗してもログのみで続行する
+    const { error: descError } = await supabase
       .from('stocks')
       .update({ business_description: result.businessOverview })
       .eq('id', stockId);
+    if (descError) {
+      console.error('business_description update failed:', descError);
+    }
 
-    revalidatePath('/stocks');
+    revalidateStockPaths(stockId);
     return { success: true, data: result };
   } catch (error) {
-    const raw = error instanceof Error ? error.message : 'AI調査に失敗しました';
+    // プロバイダ層（lib/ai）が正規化した AIProviderError の kind で分岐する。
+    // メッセージ文言マッチはSDK更新で静かに壊れるためここでは行わない
+    if (error instanceof AIProviderError) {
+      switch (error.kind) {
+        case 'insufficient_credit':
+          return { success: false, error: 'AI APIのクレジット残高が不足しています。プロバイダの管理画面からクレジットを購入してください。' };
+        case 'auth':
+          return { success: false, error: 'AI APIキーが無効です。ユーザー設定画面で正しいキーを登録してください。' };
+        case 'rate_limit':
+          return { success: false, error: 'AI APIのレート制限に達しました。しばらくしてから再度お試しください。' };
+      }
+    }
 
-    // Anthropic API のエラーをユーザーにわかりやすく翻訳
-    if (raw.includes('credit balance is too low')) {
-      return { success: false, error: 'Anthropic APIのクレジット残高が不足しています。console.anthropic.com の Plans & Billing からクレジットを購入してください。' };
-    }
-    if (raw.includes('invalid_api_key') || raw.includes('401')) {
-      return { success: false, error: 'Anthropic APIキーが無効です。ユーザー設定画面で正しいキーを登録してください。' };
-    }
-    if (raw.includes('rate_limit')) {
-      return { success: false, error: 'Anthropic APIのレート制限に達しました。しばらくしてから再度お試しください。' };
-    }
-
-    return { success: false, error: raw };
+    // 詳細はサーバーログのみに残し、ユーザーには汎用メッセージを返す（内部情報の露出防止）
+    console.error('runAIResearch failed:', error);
+    return { success: false, error: 'AI調査に失敗しました。しばらくしてから再度お試しください。' };
   }
 }
 

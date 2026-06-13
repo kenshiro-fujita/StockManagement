@@ -81,6 +81,7 @@ export async function extractFinancialMetricsFromXbrl(
   return {
     accountingStandard: standard,
     periodEnd,
+    sourceType: 'xbrl',
     results: extractAllMetrics(facts, standard),
   };
 }

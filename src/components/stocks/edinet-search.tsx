@@ -8,7 +8,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Search, FileText, Check, Download, Loader2, Database, AlertCircle } from 'lucide-react';
+import { Check, Download, Loader2, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -34,7 +34,8 @@ type MasterRow = {
   period_start: string | null;
   period_end: string | null;
   accounting_standard: string | null;
-  extraction_status: string;
+  // DB 上は DEFAULT 'pending' 付きの nullable カラムのため null を許容する
+  extraction_status: string | null;
   revenue: number | null;
   operating_income: number | null;
   net_income: number | null;

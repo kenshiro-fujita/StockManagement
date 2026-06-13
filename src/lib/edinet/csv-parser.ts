@@ -187,6 +187,7 @@ export async function extractFinancialMetrics(
   return {
     accountingStandard: standard,
     periodEnd,
+    sourceType: 'csv',
     results: extractAllMetrics(facts, standard),
   };
 }

@@ -8,13 +8,15 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
 import { isAdmin } from '@/lib/auth/admin';
 import { fetchDocumentList, filterAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 import { extractFinancialMetrics } from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { ExtractionSummary } from '@/lib/edinet/csv-parser';
+import { extractionToFinancialColumns, FINANCIAL_COLUMNS } from '@/lib/edinet/extraction-to-row';
+import { revalidateStockPaths } from '@/lib/revalidate';
+import type { TablesInsert } from '@/lib/types/database';
 
 type MasterRow = {
   id: string;
@@ -25,7 +27,8 @@ type MasterRow = {
   period_start: string | null;
   period_end: string | null;
   accounting_standard: string | null;
-  extraction_status: string;
+  // DB 上は DEFAULT 'pending' 付きの nullable カラムのため null を許容する
+  extraction_status: string | null;
   revenue: number | null;
   operating_income: number | null;
   net_income: number | null;
@@ -44,29 +47,14 @@ type MasterRow = {
   shareholders_equity: number | null;
 };
 
-/** 抽出結果からマスタ行のカラムマッピングを生成する */
+/**
+ * 抽出結果からマスタ行のカラムマッピングを生成する
+ * 財務カラムの変換は extraction-to-row.ts（単一の真実の源）に委譲する
+ */
 function extractionToColumns(extraction: ExtractionSummary) {
-  const getValue = (key: string) =>
-    extraction.results.find((r) => r.metricKey === key)?.value ?? null;
-
   return {
     accounting_standard: extraction.accountingStandard,
-    revenue: getValue('revenue'),
-    operating_income: getValue('operating_profit'),
-    net_income: getValue('net_income_parent'),
-    total_assets: getValue('total_assets'),
-    equity: getValue('equity'),
-    interest_bearing_debt: getValue('interest_bearing_debt'),
-    operating_cf: getValue('operating_cf'),
-    investing_cf: getValue('investing_cf'),
-    shares_outstanding: getValue('issued_shares'),
-    interest_expense: getValue('interest_expense'),
-    cash_and_equivalents: getValue('cash_and_equivalents'),
-    current_assets: getValue('current_assets'),
-    investments_and_other_assets: getValue('investments_and_other_assets'),
-    current_liabilities: getValue('current_liabilities'),
-    non_current_liabilities: getValue('non_current_liabilities'),
-    shareholders_equity: getValue('shareholders_equity'),
+    ...extractionToFinancialColumns(extraction),
   };
 }
 
@@ -214,7 +202,8 @@ export async function searchMasterByStockCode(
     .eq('extraction_status', 'done')
     .order('fiscal_year', { ascending: false });
 
-  return { success: true, data: (data as MasterRow[]) ?? [] };
+  // Database 型の導入によりクエリ結果が型付くため、キャスト不要で MasterRow と構造一致する
+  return { success: true, data: data ?? [] };
 }
 
 /**
@@ -247,31 +236,25 @@ export async function importMasterToFinancialData(
 
   if (!master) return { success: false, error: 'マスタデータが見つかりません' };
 
+  // マスタ → financial_data へ財務カラムをコピーする。
+  // カラム一覧は FINANCIAL_COLUMNS（単一の真実の源）から導出し、列挙の二重管理を避ける
+  const financialValues = Object.fromEntries(
+    FINANCIAL_COLUMNS.map((col) => [col, master[col] ?? null]),
+  );
+
   const { error } = await supabase.from('financial_data').upsert(
+    // FINANCIAL_COLUMNS による動的スプレッドのため、必須カラム（revenue 等）の存在を
+    // TS が静的検証できずキャストが必要。値は edinet_master の同名カラム由来であり、
+    // 欠損（null）があれば DB の NOT NULL 制約でエラーになる（従来どおりの挙動）
     {
       user_id: user.id,
       stock_id: stockId,
       fiscal_year: master.fiscal_year,
       fiscal_quarter: 'FY',
       consolidation_type: 'consolidated',
-      revenue: master.revenue,
-      operating_income: master.operating_income,
-      net_income: master.net_income,
-      total_assets: master.total_assets,
-      equity: master.equity,
-      interest_bearing_debt: master.interest_bearing_debt,
-      operating_cf: master.operating_cf,
-      investing_cf: master.investing_cf,
-      shares_outstanding: master.shares_outstanding,
-      interest_expense: master.interest_expense,
-      cash_and_equivalents: master.cash_and_equivalents,
-      current_assets: master.current_assets,
-      investments_and_other_assets: master.investments_and_other_assets,
-      current_liabilities: master.current_liabilities,
-      non_current_liabilities: master.non_current_liabilities,
-      shareholders_equity: master.shareholders_equity,
+      ...financialValues,
       input_unit: 'yen',
-    },
+    } as TablesInsert<'financial_data'>,
     { onConflict: 'user_id,stock_id,fiscal_year,fiscal_quarter,consolidation_type' },
   );
 
@@ -279,6 +262,6 @@ export async function importMasterToFinancialData(
     return { success: false, error: '財務データの取り込みに失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(stockId);
   return { success: true };
 }

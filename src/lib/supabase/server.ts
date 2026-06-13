@@ -1,5 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+// クエリ結果に型を効かせるための手起こし Database 型（詳細は database.ts 冒頭コメント参照）
+import type { Database } from '@/lib/types/database';
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a
@@ -9,7 +11,7 @@ import { cookies } from 'next/headers';
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {

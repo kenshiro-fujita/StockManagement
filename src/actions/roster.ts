@@ -8,7 +8,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { revalidateStockPaths } from '@/lib/revalidate';
 import {
   updateRosterSchema,
   updateRatingSchema,
@@ -51,7 +51,8 @@ export async function updateRosterCategory(
     return { success: false, error: '銘柄が見つかりません' };
   }
 
-  const fromCategory = (stock.roster_category as RosterCategory | null) ?? null;
+  // Database 型の導入により roster_category は RosterCategory と同じリテラル型で返るため、キャスト不要
+  const fromCategory: RosterCategory | null = stock.roster_category;
 
   // 同じカテゴリへの変更は無視
   if (fromCategory === parsed.data.category) {
@@ -78,11 +79,11 @@ export async function updateRosterCategory(
   });
 
   if (historyError) {
-    // 履歴の書き込みに失敗しても分類自体は更新済み
+    // 履歴の書き込みに失敗しても分類自体は更新済み（方針: 監査ログ系は console.error + 続行）
     console.error('roster_history insert failed:', historyError);
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(parsed.data.stock_id);
   return { success: true };
 }
 
@@ -113,7 +114,7 @@ export async function updateStockRating(
     return { success: false, error: '評価の更新に失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(parsed.data.stock_id);
   return { success: true };
 }
 
@@ -144,6 +145,6 @@ export async function updateBuyPriority(
     return { success: false, error: '優先順の更新に失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(parsed.data.stock_id);
   return { success: true };
 }

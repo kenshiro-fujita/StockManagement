@@ -12,7 +12,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { revalidateStockPaths } from '@/lib/revalidate';
 import {
   createFinancialDataSchema,
   type CreateFinancialDataInput,
@@ -64,11 +64,13 @@ async function parseAndConvert(data: CreateFinancialDataInput) {
     fiscal_year: parsed.data.fiscal_year,
     fiscal_quarter: parsed.data.fiscal_quarter,
     consolidation_type: parsed.data.consolidation_type,
-    revenue: converted.revenue,
-    operating_income: converted.operating_income,
-    net_income: converted.net_income,
-    total_assets: converted.total_assets,
-    equity: converted.equity,
+    // 必須5項目は Zod（requiredAmount）で非null保証済みだが、CONVERT_FIELDS の
+    // ループで組み立てる都合上 TS には伝わらないため非null断言を付ける
+    revenue: converted.revenue!,
+    operating_income: converted.operating_income!,
+    net_income: converted.net_income!,
+    total_assets: converted.total_assets!,
+    equity: converted.equity!,
     interest_bearing_debt: converted.interest_bearing_debt,
     operating_cf: converted.operating_cf,
     investing_cf: converted.investing_cf,
@@ -106,7 +108,7 @@ export async function createFinancialData(
     return { success: false, error: '財務データの保存に失敗しました' };
   }
 
-  revalidatePath(`/stocks/${parsed.data.stock_id}`);
+  revalidateStockPaths(parsed.data.stock_id);
   return { success: true };
 }
 
@@ -136,7 +138,7 @@ export async function updateFinancialData(
     return { success: false, error: '対象の財務データが見つかりませんでした' };
   }
 
-  revalidatePath(`/stocks/${parsed.data.stock_id}`);
+  revalidateStockPaths(parsed.data.stock_id);
   return { success: true };
 }
 
@@ -186,7 +188,7 @@ export async function addEmptyFinancialYear(
     return { success: false, error: '年度の追加に失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(stockId);
   return { success: true };
 }
 
@@ -203,6 +205,14 @@ export async function deleteFinancialData(
     return { success: false, error: '認証が必要です' };
   }
 
+  // 削除前に stock_id を取得しておく（削除後では引けず、詳細ページの revalidate ができない）
+  const { data: target } = await supabase
+    .from('financial_data')
+    .select('stock_id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('financial_data')
     .delete()
@@ -213,6 +223,6 @@ export async function deleteFinancialData(
     return { success: false, error: '財務データの削除に失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(target?.stock_id);
   return { success: true };
 }

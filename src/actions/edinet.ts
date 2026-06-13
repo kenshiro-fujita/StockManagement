@@ -12,16 +12,17 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { revalidateStockPaths } from '@/lib/revalidate';
 import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
+import { extractionToFinancialColumns } from '@/lib/edinet/extraction-to-row';
 import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
+import type { TablesInsert } from '@/lib/types/database';
 
 /** 証券コードと日付範囲を指定して EDINET から有価証券報告書を検索する */
 export async function searchEdinetDocuments(
-  stockId: string,
   stockCode: string,
   startDate: string,
   endDate: string,
@@ -89,7 +90,7 @@ export async function saveEdinetDocument(
     return { success: false, error: '書類情報の保存に失敗しました' };
   }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(stockId);
   return { success: true };
 }
 
@@ -167,6 +168,7 @@ export async function saveExtractedData(
   stockId: string,
   extraction: ExtractionSummary,
   fiscalYear: number,
+  docId: string,
   fiscalQuarter: string = 'FY',
   consolidationType: string = 'consolidated',
 ): Promise<{ success: boolean; error?: string }> {
@@ -179,36 +181,20 @@ export async function saveExtractedData(
     return { success: false, error: '認証が必要です' };
   }
 
-  // 抽出結果の MetricKey → financial_data カラムへのマッピング
-  // MetricKey（例: 'operating_profit'）と DB カラム（例: 'operating_income'）は名前が異なる場合がある
-  const getValue = (key: string) =>
-    extraction.results.find((r) => r.metricKey === key)?.value ?? null;
-
   const { error } = await supabase.from('financial_data').upsert(
+    // extractionToFinancialColumns は全カラム number | null を返すため、必須カラム
+    // （revenue 等）の非null を TS が静的検証できずキャストが必要。
+    // 抽出に欠損があれば DB の NOT NULL 制約でエラーになる（従来どおりの挙動）
     {
       user_id: user.id,
       stock_id: stockId,
       fiscal_year: fiscalYear,
       fiscal_quarter: fiscalQuarter,
       consolidation_type: consolidationType,
-      revenue: getValue('revenue'),
-      operating_income: getValue('operating_profit'),
-      net_income: getValue('net_income_parent'),
-      total_assets: getValue('total_assets'),
-      equity: getValue('equity'),
-      operating_cf: getValue('operating_cf'),
-      investing_cf: getValue('investing_cf'),
-      shares_outstanding: getValue('issued_shares'),
-      interest_bearing_debt: getValue('interest_bearing_debt'),
-      interest_expense: getValue('interest_expense'),
-      cash_and_equivalents: getValue('cash_and_equivalents'),
-      current_assets: getValue('current_assets'),
-      investments_and_other_assets: getValue('investments_and_other_assets'),
-      current_liabilities: getValue('current_liabilities'),
-      non_current_liabilities: getValue('non_current_liabilities'),
-      shareholders_equity: getValue('shareholders_equity'),
+      // MetricKey → カラムの変換は extraction-to-row.ts に一本化されている
+      ...extractionToFinancialColumns(extraction),
       input_unit: 'yen',
-    },
+    } as TablesInsert<'financial_data'>,
     { onConflict: 'user_id,stock_id,fiscal_year,fiscal_quarter,consolidation_type' },
   );
 
@@ -216,11 +202,11 @@ export async function saveExtractedData(
     return { success: false, error: '財務データの保存に失敗しました' };
   }
 
-  // FR15: 抽出ログを記録
+  // FR15: 抽出ログを記録（どの書類から・どの経路で抽出したかの実値を残す）
   const logEntries = extraction.results.map((r) => ({
     user_id: user.id,
     stock_id: stockId,
-    doc_id: 'edinet-extraction',
+    doc_id: docId,
     fiscal_year: fiscalYear,
     metric_key: r.metricKey,
     matched_tag: r.matchedTag,
@@ -229,12 +215,17 @@ export async function saveExtractedData(
     normalized_value: r.value,
     confidence: r.confidence,
     accounting_standard: extraction.accountingStandard,
-    source_type: 'csv',
+    source_type: extraction.sourceType,
   }));
 
-  await supabase.from('extraction_logs').insert(logEntries);
+  // 監査ログの書き込み失敗は主データの保存成功を妨げない（方針: console.error + 続行）。
+  // ただし FR15 の要件なので、無言で握り潰さずログには必ず残す
+  const { error: logError } = await supabase.from('extraction_logs').insert(logEntries);
+  if (logError) {
+    console.error('extraction_logs insert failed:', logError);
+  }
 
-  revalidatePath('/stocks');
+  revalidateStockPaths(stockId);
   return { success: true };
 }
 

@@ -15,7 +15,6 @@ import { redirect } from 'next/navigation';
 import { calculateAllIndicators } from '@/lib/calc';
 import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 import type { ParametersRow } from '@/lib/types/parameters';
-import type { RosterCategory } from '@/lib/types/roster';
 
 async function SidebarWithStocks() {
   await connection();
@@ -40,15 +39,15 @@ async function SidebarWithStocks() {
   const financialByStock = new Map<string, FullFinancialDataRow[]>();
   for (const fd of allFinancialData ?? []) {
     const list = financialByStock.get(fd.stock_id) ?? [];
-    list.push(fd as FullFinancialDataRow);
+    list.push(fd);
     financialByStock.set(fd.stock_id, list);
   }
 
   const paramsByStock = new Map<string, ParametersRow>();
   for (const p of allParameters ?? []) {
-    paramsByStock.set(p.stock_id as string, {
-      id: p.id as string,
-      stock_id: p.stock_id as string,
+    paramsByStock.set(p.stock_id, {
+      id: p.id,
+      stock_id: p.stock_id,
       discount_rate: Number(p.discount_rate),
       growth_rate: Number(p.growth_rate),
       tax_rate: Number(p.tax_rate),
@@ -73,7 +72,8 @@ async function SidebarWithStocks() {
     return {
       ...stock,
       theoryPrice,
-      rosterCategory: (stock.roster_category as RosterCategory | null) ?? null,
+      // Database 型の導入により roster_category は RosterCategory と同じリテラル型で返る
+      rosterCategory: stock.roster_category,
     };
   });
 

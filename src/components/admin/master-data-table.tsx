@@ -6,7 +6,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { RefreshCw, Loader2, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,15 +27,16 @@ type MasterRecord = {
   sec_code: string;
   filer_name: string;
   fiscal_year: number;
-  extraction_status: string;
+  // extraction_status / created_at は DB 上 DEFAULT 付きの nullable カラムのため null を許容する
+  extraction_status: string | null;
   error_message: string | null;
   accounting_standard: string | null;
   fetched_at: string | null;
-  created_at: string;
+  created_at: string | null;
 };
 
 /** ステータスに応じたバッジを表示する */
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string | null }) {
   switch (status) {
     case 'done':
       return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="mr-1 h-3 w-3" />完了</Badge>;

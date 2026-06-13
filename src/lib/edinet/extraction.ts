@@ -56,10 +56,13 @@ export type ExtractionResult = {
  * 1つの有価証券報告書からの全抽出結果
  * - accountingStandard: 自動判定された会計基準
  * - periodEnd: 決算期末日（年度の推定に使用）
+ * - sourceType: どの経路で抽出したか（FR15: 抽出ログに実値を記録するため。
+ *   以前は 'csv' がハードコードされており XBRL フォールバック時のログが不正確だった）
  */
 export type ExtractionSummary = {
   accountingStandard: AccountingStandard;
   periodEnd: string | null;
+  sourceType: 'csv' | 'xbrl';
   results: ExtractionResult[];
 };
 

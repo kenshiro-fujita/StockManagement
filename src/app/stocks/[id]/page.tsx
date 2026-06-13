@@ -11,8 +11,6 @@ import { StockDetailClient } from '@/components/stocks/stock-detail-client';
 import { RosterSection } from '@/components/stocks/roster-section';
 import { StarRating } from '@/components/stocks/star-rating';
 import { BuyPriorityInput } from '@/components/stocks/buy-priority-input';
-import type { FullFinancialDataRow } from '@/lib/types/financial-data';
-import type { RosterCategory } from '@/lib/types/roster';
 import { createClient } from '@/lib/supabase/server';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -60,8 +58,8 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   // Convert NUMERIC (string from Supabase) to number, or null if not yet created
   const initialParameters = parametersData
     ? {
-        id: parametersData.id as string,
-        stock_id: parametersData.stock_id as string,
+        id: parametersData.id,
+        stock_id: parametersData.stock_id,
         discount_rate: Number(parametersData.discount_rate),
         growth_rate: Number(parametersData.growth_rate),
         tax_rate: Number(parametersData.tax_rate),
@@ -83,26 +81,26 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
         <dt className="font-medium text-muted-foreground">事業セグメント</dt>
         <dd>{stock.business_segment ?? '—'}</dd>
       </dl>
-      {(stock.business_description as string | null) && (
+      {stock.business_description && (
         <div>
           <h3 className="mb-2 text-sm font-medium text-muted-foreground">事業概要</h3>
           <p className="text-sm leading-relaxed whitespace-pre-wrap">
-            {stock.business_description as string}
+            {stock.business_description}
           </p>
         </div>
       )}
       <RosterSection
         stockId={stock.id}
-        currentCategory={(stock.roster_category as RosterCategory | null) ?? null}
+        currentCategory={stock.roster_category}
       />
       <div className="flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-muted-foreground">評価</span>
-          <StarRating stockId={stock.id} currentRating={(stock.rating as number | null) ?? null} />
+          <StarRating stockId={stock.id} currentRating={stock.rating} />
         </div>
         <BuyPriorityInput
           stockId={stock.id}
-          currentPriority={(stock.buy_priority as number | null) ?? null}
+          currentPriority={stock.buy_priority}
         />
       </div>
     </div>
@@ -131,7 +129,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       <StockDetailClient
         stockId={stock.id}
         stockCode={stock.stock_code}
-        financialData={sortedFinancialData as FullFinancialDataRow[]}
+        financialData={sortedFinancialData}
         initialParameters={initialParameters}
         overviewContent={overviewContent}
       />
