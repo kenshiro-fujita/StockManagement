@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutList, LogOut, Settings } from 'lucide-react';
+import { LayoutList, LogOut, Settings, Wallet } from 'lucide-react';
 
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -56,12 +56,26 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={pathname.startsWith('/stocks')}
+                  isActive={
+                    (pathname === '/stocks' || pathname.startsWith('/stocks/')) &&
+                    pathname !== '/stocks/portfolio'
+                  }
                   asChild
                 >
                   <Link href="/stocks">
                     <LayoutList />
                     <span>銘柄一覧</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={pathname === '/stocks/portfolio'}
+                  asChild
+                >
+                  <Link href="/stocks/portfolio">
+                    <Wallet />
+                    <span>ポートフォリオ</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
