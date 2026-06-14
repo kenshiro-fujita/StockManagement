@@ -11,6 +11,7 @@ import {
 export function StockDetailTabs({
   overviewContent,
   theoryPriceContent,
+  transactionContent,
   financialContent,
   parametersContent,
   edinetContent,
@@ -19,6 +20,7 @@ export function StockDetailTabs({
 }: {
   overviewContent: ReactNode;
   theoryPriceContent: ReactNode;
+  transactionContent: ReactNode;
   financialContent: ReactNode;
   parametersContent: ReactNode;
   edinetContent?: ReactNode;
@@ -32,6 +34,7 @@ export function StockDetailTabs({
       <TabsList>
         <TabsTrigger value="overview">概要</TabsTrigger>
         <TabsTrigger value="theory-price">理論株価</TabsTrigger>
+        <TabsTrigger value="transactions">取引・損益</TabsTrigger>
         <TabsTrigger value="financial">財務データ</TabsTrigger>
         <TabsTrigger value="parameters">パラメータ</TabsTrigger>
         {edinetContent && <TabsTrigger value="edinet">EDINET</TabsTrigger>}
@@ -48,6 +51,9 @@ export function StockDetailTabs({
       </TabsContent>
       <TabsContent forceMount value="theory-price" className="mt-4 data-[state=inactive]:hidden">
         {theoryPriceContent}
+      </TabsContent>
+      <TabsContent forceMount value="transactions" className="mt-4 data-[state=inactive]:hidden">
+        {transactionContent}
       </TabsContent>
       <TabsContent forceMount value="financial" className="mt-4 data-[state=inactive]:hidden">
         {financialContent}

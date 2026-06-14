@@ -23,18 +23,22 @@ import { FinancialDataSection } from '@/components/stocks/financial-data-section
 import { ParameterSection } from '@/components/stocks/parameter-section';
 import { EdinetSearch } from '@/components/stocks/edinet-search';
 import { AIResearchSection } from '@/components/stocks/ai-research-section';
+import { TransactionSection } from '@/components/stocks/transaction-section';
+import type { TransactionRow } from '@/lib/types/transactions';
 
 export function StockDetailClient({
   stockId,
   stockCode,
   financialData,
   initialParameters,
+  transactions,
   overviewContent,
 }: {
   stockId: string;
   stockCode: string;
   financialData: FullFinancialDataRow[];
   initialParameters: ParametersRow | null;
+  transactions: TransactionRow[];
   overviewContent: React.ReactNode;
 }) {
   const [parameters, setParameters] = useState<ParametersRow | null>(initialParameters);
@@ -66,6 +70,14 @@ export function StockDetailClient({
         <TheoryPriceSection
           results={indicatorResults}
           previousResults={prevResults}
+          currentStockPrice={latestStockPrice}
+        />
+      }
+      transactionContent={
+        <TransactionSection
+          stockId={stockId}
+          transactions={transactions}
+          theoryPrice={indicatorResults?.period.theoryPrice.value ?? null}
           currentStockPrice={latestStockPrice}
         />
       }

@@ -13,6 +13,7 @@ import { StarRating } from '@/components/stocks/star-rating';
 import { BuyPriorityInput } from '@/components/stocks/buy-priority-input';
 import { createClient } from '@/lib/supabase/server';
 import { getOrCreateParameters } from '@/actions/parameters';
+import { listTransactions } from '@/actions/transactions';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,7 +23,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   // パラメータはサーバー側で get-or-create する。
   // 以前はクライアントの useEffect で初期化しており、パラメータ未作成の銘柄で
   // 「ページ取得 → マウント → さらに API 呼び出し」のウォーターフォールが発生していた
-  const [{ data: stock }, { data: financialData }, paramsResult] = await Promise.all([
+  const [{ data: stock }, { data: financialData }, paramsResult, { data: transactions }] = await Promise.all([
     supabase
       .from('stocks')
       .select('id, stock_code, company_name, market, sector, business_segment, business_description, roster_category, rating, buy_priority')
@@ -36,6 +37,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       .eq('stock_id', id)
       .order('fiscal_year', { ascending: false }),
     getOrCreateParameters(id),
+    listTransactions(id),
   ]);
 
   if (!stock) notFound();
@@ -123,6 +125,7 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
         stockCode={stock.stock_code}
         financialData={sortedFinancialData}
         initialParameters={initialParameters}
+        transactions={transactions}
         overviewContent={overviewContent}
       />
     </div>

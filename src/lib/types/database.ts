@@ -429,6 +429,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      /** 売買取引履歴（1行＝1約定）。保有ポジション・損益・売買シグナルの基礎 */
+      transactions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stock_id: string;
+          transaction_type: 'buy' | 'sell';
+          trade_date: string;
+          quantity: number;
+          unit_price: number;
+          fee: number;
+          memo: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stock_id: string;
+          transaction_type: 'buy' | 'sell';
+          trade_date: string;
+          quantity: number;
+          unit_price: number;
+          fee?: number; // DEFAULT 0
+          memo?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stock_id?: string;
+          transaction_type?: 'buy' | 'sell';
+          trade_date?: string;
+          quantity?: number;
+          unit_price?: number;
+          fee?: number;
+          memo?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
       /** EDINET マスタ（システム共通の抽出済み財務データ、書き込みは管理者のみ） */
       edinet_master: {
         Row: {
