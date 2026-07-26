@@ -1,3 +1,6 @@
+/**
+ * 銘柄に紐づく定量・定性情報を並列取得し、分析タブへ引き渡します。
+ */
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -14,33 +17,55 @@ import { BuyPriorityInput } from '@/components/stocks/buy-priority-input';
 import { createClient } from '@/lib/supabase/server';
 import { getOrCreateParameters } from '@/actions/parameters';
 import { listTransactions } from '@/actions/transactions';
+import { stockIdSchema } from '@/lib/schemas/common';
+import {
+  assertQueriesSucceeded,
+  DataAccessError,
+} from '@/lib/supabase/query-error';
 
 async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const parsedId = stockIdSchema.safeParse(id);
+  if (!parsedId.success) notFound();
+  const stockId = parsedId.data;
+
   await connection();
   const supabase = await createClient();
 
   // パラメータはサーバー側で get-or-create する。
   // 以前はクライアントの useEffect で初期化しており、パラメータ未作成の銘柄で
   // 「ページ取得 → マウント → さらに API 呼び出し」のウォーターフォールが発生していた
-  const [{ data: stock }, { data: financialData }, paramsResult, { data: transactions }] = await Promise.all([
-    supabase
-      .from('stocks')
-      .select('id, stock_code, company_name, market, sector, business_segment, business_description, roster_category, rating, buy_priority')
-      .eq('id', id)
-      .single(),
-    supabase
-      .from('financial_data')
-      .select(
-        'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity, interest_bearing_debt, operating_cf, investing_cf, shares_outstanding, interest_expense, current_stock_price, cash_and_equivalents, current_assets, investments_and_other_assets, current_liabilities, non_current_liabilities, shareholders_equity, beta, input_unit'
-      )
-      .eq('stock_id', id)
-      .order('fiscal_year', { ascending: false }),
-    getOrCreateParameters(id),
-    listTransactions(id),
-  ]);
+  const [stockResult, financialDataResult, paramsResult, transactionsResult] =
+    await Promise.all([
+      supabase
+        .from('stocks')
+        .select(
+          'id, stock_code, company_name, market, sector, business_segment, business_description, roster_category, rating, buy_priority'
+        )
+        .eq('id', stockId)
+        .maybeSingle(),
+      supabase
+        .from('financial_data')
+        .select(
+          'id, fiscal_year, fiscal_quarter, consolidation_type, revenue, operating_income, net_income, total_assets, equity, interest_bearing_debt, operating_cf, investing_cf, shares_outstanding, interest_expense, current_stock_price, cash_and_equivalents, current_assets, investments_and_other_assets, current_liabilities, non_current_liabilities, shareholders_equity, beta, input_unit'
+        )
+        .eq('stock_id', stockId)
+        .order('fiscal_year', { ascending: false }),
+      getOrCreateParameters(stockId),
+      listTransactions(stockId),
+    ]);
 
+  assertQueriesSucceeded('銘柄詳細の取得', [stockResult, financialDataResult]);
+  const stock = stockResult.data;
+  const financialData = financialDataResult.data;
   if (!stock) notFound();
+
+  if (!paramsResult.success) {
+    throw new DataAccessError('パラメータの取得', [paramsResult.error]);
+  }
+  if (!transactionsResult.success) {
+    throw new DataAccessError('取引履歴の取得', [transactionsResult.error]);
+  }
 
   // Sort fiscal_quarter: FY first, then Q4→Q1 within same year
   const QUARTER_ORDER: Record<string, number> = {
@@ -51,15 +76,16 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
     Q1: 4,
   };
   const sortedFinancialData = [...(financialData ?? [])].sort((a, b) => {
-    if (a.fiscal_year !== b.fiscal_year)
-      return b.fiscal_year - a.fiscal_year;
-    return (QUARTER_ORDER[a.fiscal_quarter] ?? 99) -
-      (QUARTER_ORDER[b.fiscal_quarter] ?? 99);
+    if (a.fiscal_year !== b.fiscal_year) return b.fiscal_year - a.fiscal_year;
+    return (
+      (QUARTER_ORDER[a.fiscal_quarter] ?? 99) -
+      (QUARTER_ORDER[b.fiscal_quarter] ?? 99)
+    );
   });
 
-  // get-or-create 済み（NUMERIC→number 変換も action 内で完了）。
-  // 失敗時のみ null になり、その場合は ParameterSection 側でフォールバック取得する
-  const initialParameters = paramsResult.success ? (paramsResult.data ?? null) : null;
+  // get-or-create 済みで、NUMERIC→number 変換もAction境界で完了しています。
+  const initialParameters = paramsResult.data;
+  const transactions = transactionsResult.data;
 
   const overviewContent = (
     <div className="space-y-6">
@@ -77,8 +103,10 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       </dl>
       {stock.business_description && (
         <div>
-          <h3 className="mb-2 text-sm font-medium text-muted-foreground">事業概要</h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+          <h3 className="mb-2 text-sm font-medium text-muted-foreground">
+            事業概要
+          </h3>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
             {stock.business_description}
           </p>
         </div>
@@ -89,7 +117,9 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       />
       <div className="flex flex-wrap items-center gap-6">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-muted-foreground">評価</span>
+          <span className="text-sm font-medium text-muted-foreground">
+            評価
+          </span>
           <StarRating stockId={stock.id} currentRating={stock.rating} />
         </div>
         <BuyPriorityInput
@@ -121,6 +151,8 @@ async function StockDetail({ params }: { params: Promise<{ id: string }> }) {
       </div>
 
       <StockDetailClient
+        // 銘柄間の画面遷移で編集途中のクライアント状態を持ち越さないようにします。
+        key={stock.id}
         stockId={stock.id}
         stockCode={stock.stock_code}
         financialData={sortedFinancialData}

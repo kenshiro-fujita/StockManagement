@@ -44,23 +44,31 @@ export function StarRating({
     // 先にローカルへ反映（楽観的更新）。失敗したら戻す
     setOptimistic(rating);
     setIsPending(true);
-    const result = await updateStockRating({ stock_id: stockId, rating });
-    setIsPending(false);
+    try {
+      const result = await updateStockRating({ stock_id: stockId, rating });
+      if (result.success) {
+        // サーバー側の revalidate と合わせて props も最新化する
+        router.refresh();
+        return;
+      }
 
-    if (result.success) {
-      // サーバー側の revalidate と合わせて props も最新化する
-      router.refresh();
-    } else {
       setOptimistic(previous);
       toast.error(result.error ?? '評価の更新に失敗しました');
+    } catch {
+      setOptimistic(previous);
+      toast.error('評価の更新に失敗しました');
+    } finally {
+      setIsPending(false);
     }
   };
 
   /** 矢印キーはフォーカス移動のみ（保存しない）。Home/End にも対応 */
   const handleKeyDown = (e: React.KeyboardEvent, star: number) => {
     let target: number | null = null;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowUp') target = Math.min(5, star + 1);
-    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') target = Math.max(1, star - 1);
+    if (e.key === 'ArrowRight' || e.key === 'ArrowUp')
+      target = Math.min(5, star + 1);
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown')
+      target = Math.max(1, star - 1);
     else if (e.key === 'Home') target = 1;
     else if (e.key === 'End') target = 5;
 
@@ -95,7 +103,7 @@ export function StarRating({
           onMouseEnter={() => setHovered(star)}
           onMouseLeave={() => setHovered(null)}
           onBlur={() => setFocusedStar(null)}
-          className="p-0.5 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 rounded disabled:opacity-50"
+          className="rounded p-0.5 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-teal-500 disabled:opacity-50"
         >
           <Star
             aria-hidden="true"
@@ -108,7 +116,9 @@ export function StarRating({
         </button>
       ))}
       {effectiveRating != null && (
-        <span className="ml-1 text-sm text-muted-foreground">{effectiveRating}/5</span>
+        <span className="ml-1 text-sm text-muted-foreground">
+          {effectiveRating}/5
+        </span>
       )}
     </div>
   );

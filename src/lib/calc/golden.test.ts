@@ -7,6 +7,17 @@ import {
 } from './__fixtures__/golden-data';
 
 /**
+ * エッジケースの派生データが必須項目を欠かさないよう、fixture の前提を実行時にも検証します。
+ */
+function getFirstGoldenFinancialRow() {
+  const [row] = GOLDEN_FINANCIAL_DATA;
+  if (!row) {
+    throw new Error('ゴールデンテストには財務データが1件以上必要です');
+  }
+  return row;
+}
+
+/**
  * ゴールデンテスト — 1銘柄×3期分
  *
  * テストケース（1銘柄×3期分）でスプレッドシートと同一の計算結果を出力することを検証する。
@@ -16,7 +27,10 @@ import {
  * 将来的にユーザーの実スプレッドシートデータで置き換える前提。
  */
 describe('ゴールデンテスト（FY2024 最新期）', () => {
-  const result = calculateAllIndicators(GOLDEN_FINANCIAL_DATA, GOLDEN_PARAMETERS);
+  const result = calculateAllIndicators(
+    GOLDEN_FINANCIAL_DATA,
+    GOLDEN_PARAMETERS
+  );
   const p = result.period;
 
   describe('収益性指標', () => {
@@ -39,7 +53,9 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
     });
 
     it('純利益前年比成長率 = 20%', () => {
-      expect(p.netIncomeGrowthRate.value).toBe(GOLDEN_EXPECTED.netIncomeGrowthRate);
+      expect(p.netIncomeGrowthRate.value).toBe(
+        GOLDEN_EXPECTED.netIncomeGrowthRate
+      );
     });
   });
 
@@ -71,7 +87,9 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
     });
 
     it('移動平均ROIC（3期平均）= 11.21%', () => {
-      expect(result.movingAverageROIC.value).toBe(GOLDEN_EXPECTED.movingAverageROIC);
+      expect(result.movingAverageROIC.value).toBe(
+        GOLDEN_EXPECTED.movingAverageROIC
+      );
     });
   });
 
@@ -119,7 +137,9 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
     });
 
     it('5年後理論時価総額', () => {
-      expect(p.futureTheoryMarketCap.value).toBe(GOLDEN_EXPECTED.futureTheoryMarketCap);
+      expect(p.futureTheoryMarketCap.value).toBe(
+        GOLDEN_EXPECTED.futureTheoryMarketCap
+      );
     });
 
     it('6年目当期純利益', () => {
@@ -129,11 +149,15 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
 
   describe('安全性指標', () => {
     it('安全域（現状）= 220円', () => {
-      expect(p.safetyMarginCurrent.value).toBe(GOLDEN_EXPECTED.safetyMarginCurrent);
+      expect(p.safetyMarginCurrent.value).toBe(
+        GOLDEN_EXPECTED.safetyMarginCurrent
+      );
     });
 
     it('安全域（成長込）= 453円', () => {
-      expect(p.safetyMarginGrowth.value).toBe(GOLDEN_EXPECTED.safetyMarginGrowth);
+      expect(p.safetyMarginGrowth.value).toBe(
+        GOLDEN_EXPECTED.safetyMarginGrowth
+      );
     });
 
     it('安全率（現状）= 46.81%', () => {
@@ -145,11 +169,15 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
     });
 
     it('理想購入株価（対現状）= 235円', () => {
-      expect(p.idealBuyPriceCurrent.value).toBe(GOLDEN_EXPECTED.idealBuyPriceCurrent);
+      expect(p.idealBuyPriceCurrent.value).toBe(
+        GOLDEN_EXPECTED.idealBuyPriceCurrent
+      );
     });
 
     it('理想購入株価（対成長）= 351円', () => {
-      expect(p.idealBuyPriceGrowth.value).toBe(GOLDEN_EXPECTED.idealBuyPriceGrowth);
+      expect(p.idealBuyPriceGrowth.value).toBe(
+        GOLDEN_EXPECTED.idealBuyPriceGrowth
+      );
     });
   });
 
@@ -195,8 +223,8 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
 describe('エッジケース', () => {
   it('財務データが1期のみでも算出できる（成長率はnull）', () => {
     const result = calculateAllIndicators(
-      [GOLDEN_FINANCIAL_DATA[0]],
-      GOLDEN_PARAMETERS,
+      [getFirstGoldenFinancialRow()],
+      GOLDEN_PARAMETERS
     );
     expect(result.period.equityRatio.value).toBe(50);
     expect(result.period.revenueGrowthRate.value).toBeNull();
@@ -205,15 +233,18 @@ describe('エッジケース', () => {
 
   it('空の財務データでエラーを投げる', () => {
     expect(() => calculateAllIndicators([], GOLDEN_PARAMETERS)).toThrow(
-      '財務データが1件以上必要です',
+      '財務データが1件以上必要です'
     );
   });
 
   it('sharesOutstandingがnullの場合、株式系指標はnull', () => {
     const dataWithNullShares = [
-      { ...GOLDEN_FINANCIAL_DATA[0], shares_outstanding: null },
+      { ...getFirstGoldenFinancialRow(), shares_outstanding: null },
     ];
-    const result = calculateAllIndicators(dataWithNullShares, GOLDEN_PARAMETERS);
+    const result = calculateAllIndicators(
+      dataWithNullShares,
+      GOLDEN_PARAMETERS
+    );
     expect(result.period.eps.value).toBeNull();
     expect(result.period.theoryPrice.value).toBeNull();
     expect(result.period.growthTheoryPrice.value).toBeNull();
@@ -221,7 +252,7 @@ describe('エッジケース', () => {
 
   it('currentStockPriceがnullの場合、PER/PBR/安全域はnull', () => {
     const dataWithNullPrice = [
-      { ...GOLDEN_FINANCIAL_DATA[0], current_stock_price: null },
+      { ...getFirstGoldenFinancialRow(), current_stock_price: null },
     ];
     const result = calculateAllIndicators(dataWithNullPrice, GOLDEN_PARAMETERS);
     expect(result.period.per.value).toBeNull();
@@ -232,7 +263,7 @@ describe('エッジケース', () => {
 
   it('interestBearingDebtがnullの場合、0として計算する', () => {
     const dataWithNullDebt = [
-      { ...GOLDEN_FINANCIAL_DATA[0], interest_bearing_debt: null },
+      { ...getFirstGoldenFinancialRow(), interest_bearing_debt: null },
     ];
     const result = calculateAllIndicators(dataWithNullDebt, GOLDEN_PARAMETERS);
     // 有利子負債0 → 理論株価 = (35B + 20B - 0) ÷ 100M = 550

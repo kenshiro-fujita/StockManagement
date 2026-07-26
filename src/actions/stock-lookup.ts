@@ -10,9 +10,11 @@
  */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedContext } from '@/lib/supabase/auth';
 import { fetchDocumentList } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
+import { fourDigitStockCodeSchema } from '@/lib/schemas/common';
+import type { ActionResult } from '@/lib/types/action';
 
 export type StockLookupResult = {
   companyName: string;
@@ -30,16 +32,22 @@ function sleep(ms: number): Promise<void> {
 }
 
 export async function lookupStockByCode(
-  stockCode: string,
-): Promise<{ success: boolean; error?: string; data?: StockLookupResult }> {
-  if (!/^\d{4}$/.test(stockCode)) {
+  stockCode: string
+): Promise<ActionResult<StockLookupResult>> {
+  if (!fourDigitStockCodeSchema.safeParse(stockCode).success) {
     return { success: false, error: '4桁の証券コードで入力してください' };
   }
 
+  // 外部APIを伴う Server Action は、UI の認証ゲートとは別に直接POSTも拒否します。
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+
   // まずマスタを逆引きする（バッチ取得済みなら API を叩かず即座に返る）
-  const supabase = await createClient();
+  const { supabase } = context;
   const secCode5 = `${stockCode}0`;
-  const { data: master } = await supabase
+  const { data: master, error: masterError } = await supabase
     .from('edinet_master')
     .select('filer_name, edinet_code, sec_code')
     .eq('sec_code', secCode5)
@@ -47,6 +55,9 @@ export async function lookupStockByCode(
     .limit(1)
     .maybeSingle();
 
+  if (masterError) {
+    return { success: false, error: '企業情報の確認に失敗しました' };
+  }
   if (master) {
     return {
       success: true,
@@ -70,16 +81,19 @@ export async function lookupStockByCode(
 
       const response = await fetchDocumentList(dateStr, apiKey);
       const match = response.results?.find(
-        (doc) => doc.secCode && doc.secCode.slice(0, 4) === stockCode && doc.filerName,
+        (doc) =>
+          doc.secCode && doc.secCode.slice(0, 4) === stockCode && doc.filerName
       );
 
-      if (match) {
+      // Array.find のコールバック内で行った絞り込みは戻り値型へ残らないため、
+      // 保存直前にも明示ガードを置いて非 null 断言を避けます。
+      if (match?.secCode && match.filerName) {
         return {
           success: true,
           data: {
-            companyName: match.filerName!,
+            companyName: match.filerName,
             edinetCode: match.edinetCode,
-            secCode: match.secCode!,
+            secCode: match.secCode,
           },
         };
       }
@@ -88,9 +102,15 @@ export async function lookupStockByCode(
       if (i < LOOKUP_DAYS - 1) await sleep(RATE_LIMIT_DELAY_MS);
     }
 
-    return { success: false, error: `証券コード ${stockCode} の企業が見つかりませんでした` };
+    return {
+      success: false,
+      error: `証券コード ${stockCode} の企業が見つかりませんでした`,
+    };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'EDINET API に接続できませんでした';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'EDINET API に接続できませんでした';
     return { success: false, error: message };
   }
 }

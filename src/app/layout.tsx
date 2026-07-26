@@ -1,7 +1,10 @@
+/**
+ * アプリ全体の言語・フォント・テーマ・通知基盤を提供します。
+ */
 import type { Metadata } from 'next';
 import { Source_Sans_3, Noto_Sans_JP } from 'next/font/google';
 import { ThemeProvider } from 'next-themes';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
 const defaultUrl = process.env.VERCEL_URL
@@ -10,7 +13,11 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: 'StockManagement',
+  title: {
+    default: 'StockManagement',
+    template: '%s | StockManagement',
+  },
+  applicationName: 'StockManagement',
   description: '株式投資の財務分析アプリ',
 };
 

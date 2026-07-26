@@ -1,6 +1,12 @@
+/**
+ * 理論株価計算に用いる前提値の入力・保存を担当します。
+ *
+ * 表示単位と内部単位の変換をこの境界に閉じ込め、計算ロジックへは常に
+ * 正規化済みの値だけを渡します。
+ */
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -26,21 +32,21 @@ import {
   type UpdateParametersInput,
 } from '@/lib/schemas/parameters';
 import type { ParametersRow } from '@/lib/types/parameters';
-import { getOrCreateParameters, updateParameters } from '@/actions/parameters';
+import { updateParameters } from '@/actions/parameters';
 
-/** Convert internal value to display value (e.g. 0.08 → 8.0) */
+/** 内部値を利用者向けの表示単位へ変換します（例: 0.08 → 8.0）。 */
 function toDisplay(key: ParameterKey, value: number): number {
   const meta = PARAMETER_META[key];
   return Math.round(value * meta.displayMultiplier * 1000) / 1000;
 }
 
-/** Convert display value back to internal value (e.g. 8.0 → 0.08) */
+/** 表示単位の値を計算用の内部値へ戻します（例: 8.0 → 0.08）。 */
 function fromDisplay(key: ParameterKey, displayValue: number): number {
   const meta = PARAMETER_META[key];
   return displayValue / meta.displayMultiplier;
 }
 
-/** Slider min/max/step in display units */
+/** スライダーの範囲と刻みを表示単位で返します。 */
 function sliderProps(key: ParameterKey) {
   const meta = PARAMETER_META[key];
   return {
@@ -56,46 +62,20 @@ export function ParameterSection({
   onParametersChange,
 }: {
   stockId: string;
-  initialParameters: ParametersRow | null;
+  initialParameters: ParametersRow;
   onParametersChange?: (params: ParametersRow) => void;
 }) {
-  const [parameters, setParameters] = useState<ParametersRow | null>(initialParameters);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [parameters, setParameters] =
+    useState<ParametersRow>(initialParameters);
   const [isPending, startTransition] = useTransition();
 
-  const handleSaved = useCallback((newParams: ParametersRow) => {
-    setParameters(newParams);
-    onParametersChange?.(newParams);
-  }, [onParametersChange]);
-
-  // Initialize parameters on first mount if not yet created
-  useEffect(() => {
-    if (parameters) return;
-    setIsInitializing(true);
-    getOrCreateParameters(stockId)
-      .then((result) => {
-        if (result.success && result.data) {
-          setParameters(result.data);
-          onParametersChange?.(result.data);
-        } else {
-          toast.error(result.error ?? 'パラメータの取得に失敗しました');
-        }
-      })
-      .catch(() => {
-        toast.error('パラメータの取得中にエラーが発生しました');
-      })
-      .finally(() => {
-        setIsInitializing(false);
-      });
-  }, [stockId]); // eslint-disable-line react-hooks/exhaustive-deps -- parameters and onParametersChange intentionally excluded; effect only runs on mount
-
-  if (isInitializing || !parameters) {
-    return (
-      <div className="space-y-4">
-        <p className="text-muted-foreground text-sm">パラメータを読み込んでいます...</p>
-      </div>
-    );
-  }
+  const handleSaved = useCallback(
+    (newParams: ParametersRow) => {
+      setParameters(newParams);
+      onParametersChange?.(newParams);
+    },
+    [onParametersChange]
+  );
 
   return (
     <ParameterForm
@@ -136,12 +116,16 @@ function ParameterForm({
   const handleSubmit = useCallback(
     (values: UpdateParametersInput) => {
       startTransition(async () => {
-        const result = await updateParameters(stockId, values);
-        if (result.success && result.data) {
-          toast.success('パラメータを保存しました');
-          onSaved(result.data);
-        } else {
-          toast.error(result.error ?? 'パラメータの保存に失敗しました');
+        try {
+          const result = await updateParameters(stockId, values);
+          if (result.success) {
+            toast.success('パラメータを保存しました');
+            onSaved(result.data);
+          } else {
+            toast.error(result.error);
+          }
+        } catch {
+          toast.error('パラメータの保存中にエラーが発生しました');
         }
       });
     },
@@ -149,10 +133,18 @@ function ParameterForm({
   );
 
   const handleReset = useCallback(() => {
-    form.setValue('discount_rate', PARAMETER_DEFAULTS.discount_rate, { shouldDirty: true });
-    form.setValue('growth_rate', PARAMETER_DEFAULTS.growth_rate, { shouldDirty: true });
-    form.setValue('tax_rate', PARAMETER_DEFAULTS.tax_rate, { shouldDirty: true });
-    form.setValue('cap_multiplier', PARAMETER_DEFAULTS.cap_multiplier, { shouldDirty: true });
+    form.setValue('discount_rate', PARAMETER_DEFAULTS.discount_rate, {
+      shouldDirty: true,
+    });
+    form.setValue('growth_rate', PARAMETER_DEFAULTS.growth_rate, {
+      shouldDirty: true,
+    });
+    form.setValue('tax_rate', PARAMETER_DEFAULTS.tax_rate, {
+      shouldDirty: true,
+    });
+    form.setValue('cap_multiplier', PARAMETER_DEFAULTS.cap_multiplier, {
+      shouldDirty: true,
+    });
   }, [form]);
 
   return (
@@ -174,10 +166,7 @@ function ParameterForm({
             <RotateCcw className="mr-2 h-4 w-4" />
             デフォルトに戻す
           </Button>
-          <Button
-            type="submit"
-            disabled={isPending || !form.formState.isDirty}
-          >
+          <Button type="submit" disabled={isPending || !form.formState.isDirty}>
             {isPending ? '保存中...' : '保存'}
           </Button>
         </div>
@@ -213,8 +202,11 @@ function ParameterField({
                   max={slider.max}
                   step={slider.step}
                   value={[displayValue]}
-                  onValueChange={([v]) => {
-                    field.onChange(fromDisplay(paramKey, v));
+                  onValueChange={(values) => {
+                    const value = values[0];
+                    if (value != null) {
+                      field.onChange(fromDisplay(paramKey, value));
+                    }
                   }}
                   aria-label={meta.label}
                   className="flex-1"
@@ -237,11 +229,14 @@ function ParameterField({
                   className="w-20 text-right tabular-nums"
                   aria-label={`${meta.label}の値`}
                 />
-                <span className="w-6 text-sm text-muted-foreground">{meta.unit}</span>
+                <span className="w-6 text-sm text-muted-foreground">
+                  {meta.unit}
+                </span>
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              デフォルト: {toDisplay(paramKey, PARAMETER_DEFAULTS[paramKey])}{meta.unit}
+              デフォルト: {toDisplay(paramKey, PARAMETER_DEFAULTS[paramKey])}
+              {meta.unit}
               {' — '}
               {meta.description}
             </p>

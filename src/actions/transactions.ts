@@ -8,8 +8,10 @@
  */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedContext } from '@/lib/supabase/auth';
+import { checkStockOwnership } from '@/lib/supabase/ownership';
 import { revalidateStockPaths } from '@/lib/revalidate';
+import { idSchema, stockIdSchema } from '@/lib/schemas/common';
 import {
   createTransactionSchema,
   updateTransactionSchema,
@@ -17,62 +19,92 @@ import {
   type UpdateTransactionInput,
 } from '@/lib/schemas/transactions';
 import type { TransactionRow } from '@/lib/types/transactions';
+import type { ActionResult } from '@/lib/types/action';
+import type { Tables } from '@/lib/types/database';
+
+/** Supabase の NUMERIC を画面が扱う number へ正規化します。 */
+function toTransactionRow(
+  row: Pick<
+    Tables<'transactions'>,
+    | 'id'
+    | 'stock_id'
+    | 'transaction_type'
+    | 'trade_date'
+    | 'quantity'
+    | 'unit_price'
+    | 'fee'
+    | 'memo'
+  >
+): TransactionRow {
+  return {
+    id: row.id,
+    stock_id: row.stock_id,
+    transaction_type: row.transaction_type,
+    trade_date: row.trade_date,
+    quantity: Number(row.quantity),
+    unit_price: Number(row.unit_price),
+    fee: Number(row.fee),
+    memo: row.memo,
+  };
+}
 
 /** 取引履歴を約定日降順（同日は登録順の降順）で取得する */
 export async function listTransactions(
-  stockId: string,
-): Promise<{ data: TransactionRow[] }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { data: [] };
+  stockId: string
+): Promise<ActionResult<TransactionRow[]>> {
+  if (!stockIdSchema.safeParse(stockId).success) {
+    return { success: false, error: '無効な銘柄IDです' };
+  }
 
-  const { data } = await supabase
+  const context = await getAuthenticatedContext();
+  if (!context) return { success: false, error: '認証が必要です' };
+  const { supabase, user } = context;
+
+  const { data, error } = await supabase
     .from('transactions')
-    .select('id, stock_id, transaction_type, trade_date, quantity, unit_price, fee, memo')
+    .select(
+      'id, stock_id, transaction_type, trade_date, quantity, unit_price, fee, memo'
+    )
     .eq('stock_id', stockId)
     .eq('user_id', user.id)
     .order('trade_date', { ascending: false })
     .order('created_at', { ascending: false });
 
-  // NUMERIC は文字列で返ることがあるため number へ正規化する
-  const rows: TransactionRow[] = (data ?? []).map((r) => ({
-    id: r.id,
-    stock_id: r.stock_id,
-    transaction_type: r.transaction_type,
-    trade_date: r.trade_date,
-    quantity: Number(r.quantity),
-    unit_price: Number(r.unit_price),
-    fee: Number(r.fee),
-    memo: r.memo,
-  }));
+  if (error) {
+    console.error('listTransactions failed:', error);
+    return { success: false, error: '取引履歴の取得に失敗しました' };
+  }
 
-  return { data: rows };
+  return { success: true, data: (data ?? []).map(toTransactionRow) };
 }
 
 export async function createTransaction(
-  input: CreateTransactionInput,
-): Promise<{ success: boolean; error?: string }> {
+  input: CreateTransactionInput
+): Promise<ActionResult> {
   const parsed = createTransactionSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります',
+    };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です' };
+  const context = await getAuthenticatedContext();
+  if (!context) return { success: false, error: '認証が必要です' };
+  const { supabase, user } = context;
 
   // 取引先の銘柄が自分のものか確認（他人の stock_id を指す行の作成を防ぐ多層防御）
-  const { data: owned } = await supabase
-    .from('stocks')
-    .select('id')
-    .eq('id', parsed.data.stock_id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (!owned) return { success: false, error: '対象の銘柄が見つかりません' };
+  const ownership = await checkStockOwnership(
+    supabase,
+    user.id,
+    parsed.data.stock_id
+  );
+  if (ownership === 'error') {
+    return { success: false, error: '銘柄情報の確認に失敗しました' };
+  }
+  if (ownership === 'not_found') {
+    return { success: false, error: '対象の銘柄が見つかりません' };
+  }
 
   const { error } = await supabase.from('transactions').insert({
     user_id: user.id,
@@ -92,18 +124,19 @@ export async function createTransaction(
 }
 
 export async function updateTransaction(
-  input: UpdateTransactionInput,
-): Promise<{ success: boolean; error?: string }> {
+  input: UpdateTransactionInput
+): Promise<ActionResult> {
   const parsed = updateTransactionSchema.safeParse(input);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります',
+    };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です' };
+  const context = await getAuthenticatedContext();
+  if (!context) return { success: false, error: '認証が必要です' };
+  const { supabase, user } = context;
 
   const { data: updated, error } = await supabase
     .from('transactions')
@@ -117,35 +150,49 @@ export async function updateTransaction(
     })
     .eq('id', parsed.data.id)
     .eq('user_id', user.id)
-    .select('id');
+    // フォームの銘柄IDと取引の親銘柄を一致させ、別銘柄の再検証を防ぎます。
+    .eq('stock_id', parsed.data.stock_id)
+    .select('id, stock_id');
 
   if (error) return { success: false, error: '取引の更新に失敗しました' };
-  if (!updated || updated.length === 0) {
+  const updatedTransaction = updated?.[0];
+  if (!updatedTransaction) {
     return { success: false, error: '対象の取引が見つかりませんでした' };
   }
 
-  revalidateStockPaths(parsed.data.stock_id);
+  revalidateStockPaths(updatedTransaction.stock_id);
   return { success: true };
 }
 
 export async function deleteTransaction(
   id: string,
-  stockId: string,
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: '認証が必要です' };
+  stockId: string
+): Promise<ActionResult> {
+  if (
+    !idSchema.safeParse(id).success ||
+    !stockIdSchema.safeParse(stockId).success
+  ) {
+    return { success: false, error: '入力内容に誤りがあります' };
+  }
 
-  const { error } = await supabase
+  const context = await getAuthenticatedContext();
+  if (!context) return { success: false, error: '認証が必要です' };
+  const { supabase, user } = context;
+
+  const { data: deleted, error } = await supabase
     .from('transactions')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('stock_id', stockId)
+    .select('id, stock_id');
 
   if (error) return { success: false, error: '取引の削除に失敗しました' };
+  const deletedTransaction = deleted?.[0];
+  if (!deletedTransaction) {
+    return { success: false, error: '対象の取引が見つかりませんでした' };
+  }
 
-  revalidateStockPaths(stockId);
+  revalidateStockPaths(deletedTransaction.stock_id);
   return { success: true };
 }

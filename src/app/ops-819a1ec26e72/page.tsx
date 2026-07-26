@@ -6,18 +6,34 @@ import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
 import { Database, CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { assertQueriesSucceeded } from '@/lib/supabase/query-error';
 
 async function MasterStats() {
   await connection();
   const supabase = await createClient();
 
-  const [{ count: totalCount }, { count: doneCount }, { count: pendingCount }, { count: errorCount }] =
-    await Promise.all([
-      supabase.from('edinet_master').select('*', { count: 'exact', head: true }),
-      supabase.from('edinet_master').select('*', { count: 'exact', head: true }).eq('extraction_status', 'done'),
-      supabase.from('edinet_master').select('*', { count: 'exact', head: true }).eq('extraction_status', 'pending'),
-      supabase.from('edinet_master').select('*', { count: 'exact', head: true }).eq('extraction_status', 'error'),
-    ]);
+  const countResults = await Promise.all([
+    supabase.from('edinet_master').select('*', { count: 'exact', head: true }),
+    supabase
+      .from('edinet_master')
+      .select('*', { count: 'exact', head: true })
+      .eq('extraction_status', 'done'),
+    supabase
+      .from('edinet_master')
+      .select('*', { count: 'exact', head: true })
+      .eq('extraction_status', 'pending'),
+    supabase
+      .from('edinet_master')
+      .select('*', { count: 'exact', head: true })
+      .eq('extraction_status', 'error'),
+  ]);
+  assertQueriesSucceeded('EDINETマスタ統計の取得', countResults);
+  const [
+    { count: totalCount },
+    { count: doneCount },
+    { count: pendingCount },
+    { count: errorCount },
+  ] = countResults;
 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -45,14 +61,24 @@ async function MasterStats() {
   );
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+function StatCard({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+}) {
   return (
     <div className="rounded-lg border p-4">
-      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
         {icon}
         {label}
       </div>
-      <p className="mt-2 text-3xl font-bold tabular-nums">{value.toLocaleString()}</p>
+      <p className="mt-2 text-3xl font-bold tabular-nums">
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }
@@ -72,17 +98,21 @@ export default function AdminDashboard() {
         <div className="flex gap-3">
           <Link
             href="/ops-819a1ec26e72/batch"
-            className="rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+            className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
           >
             <p className="font-medium">バッチ取得</p>
-            <p className="text-sm text-muted-foreground">EDINET から有報を取得・パース</p>
+            <p className="text-sm text-muted-foreground">
+              EDINET から有報を取得・パース
+            </p>
           </Link>
           <Link
             href="/ops-819a1ec26e72/master"
-            className="rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+            className="rounded-lg border p-4 transition-colors hover:bg-muted/50"
           >
             <p className="font-medium">マスタ管理</p>
-            <p className="text-sm text-muted-foreground">登録済みデータの一覧・エラー確認</p>
+            <p className="text-sm text-muted-foreground">
+              登録済みデータの一覧・エラー確認
+            </p>
           </Link>
         </div>
       </section>

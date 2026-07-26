@@ -28,7 +28,9 @@ function getDevAccount(mode: 'user' | 'admin') {
       ? process.env.NEXT_PUBLIC_DEV_LOGIN_USER_PASSWORD
       : process.env.NEXT_PUBLIC_DEV_LOGIN_ADMIN_PASSWORD;
   const dest =
-    mode === 'user' ? '/stocks' : `/${process.env.NEXT_PUBLIC_ADMIN_PATH ?? 'ops-default'}`;
+    mode === 'user'
+      ? '/stocks'
+      : `/${process.env.NEXT_PUBLIC_ADMIN_PATH ?? 'ops-819a1ec26e72'}`;
 
   if (!email || !password) return null;
   return { email, password, dest };
@@ -42,7 +44,7 @@ export function ModeSelector() {
     const account = getDevAccount(mode);
     if (!account) {
       toast.error(
-        '開発用ログイン情報が未設定です。.env.local に NEXT_PUBLIC_DEV_LOGIN_* を設定してください。',
+        '開発用ログイン情報が未設定です。.env.local に NEXT_PUBLIC_DEV_LOGIN_* を設定してください。'
       );
       return;
     }
@@ -50,22 +52,30 @@ export function ModeSelector() {
     setLoadingMode(mode);
     const supabase = createClient();
 
-    // 既存セッションがあればサインアウトしてから新規ログイン（モード切り替え時の混在を防ぐ）
-    await supabase.auth.signOut();
+    try {
+      // 既存セッションを破棄してから新規ログインし、モード間で認証状態を混在させない。
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) {
+        throw signOutError;
+      }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: account.email,
-      password: account.password,
-    });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: account.email,
+        password: account.password,
+      });
 
-    if (error) {
+      if (error) {
+        throw error;
+      }
+
+      router.push(account.dest);
+      router.refresh();
+    } catch {
+      // 認証プロバイダーの内部情報は開発画面にも露出させない。
+      toast.error('ログインに失敗しました');
+    } finally {
       setLoadingMode(null);
-      toast.error(`ログインに失敗しました: ${error.message}`);
-      return;
     }
-
-    router.push(account.dest);
-    router.refresh();
   };
 
   return (
@@ -74,11 +84,11 @@ export function ModeSelector() {
         type="button"
         onClick={() => handleSelect('user')}
         disabled={loadingMode !== null}
-        className="rounded-lg border-2 border-teal-500 bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/30 dark:hover:bg-teal-950/50 p-8 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg border-2 border-teal-500 bg-teal-50 p-8 text-left transition-colors hover:bg-teal-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-950/30 dark:hover:bg-teal-950/50"
       >
-        <div className="flex items-center gap-3 mb-3">
+        <div className="mb-3 flex items-center gap-3">
           {loadingMode === 'user' ? (
-            <Loader2 className="h-8 w-8 text-teal-600 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
           ) : (
             <LayoutList className="h-8 w-8 text-teal-600" />
           )}
@@ -93,11 +103,11 @@ export function ModeSelector() {
         type="button"
         onClick={() => handleSelect('admin')}
         disabled={loadingMode !== null}
-        className="rounded-lg border-2 border-amber-500 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-950/50 p-8 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="rounded-lg border-2 border-amber-500 bg-amber-50 p-8 text-left transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
       >
-        <div className="flex items-center gap-3 mb-3">
+        <div className="mb-3 flex items-center gap-3">
           {loadingMode === 'admin' ? (
-            <Loader2 className="h-8 w-8 text-amber-600 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
           ) : (
             <Shield className="h-8 w-8 text-amber-600" />
           )}

@@ -7,7 +7,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { RefreshCw, Loader2, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import {
+  RefreshCw,
+  Loader2,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -39,13 +45,28 @@ type MasterRecord = {
 function StatusBadge({ status }: { status: string | null }) {
   switch (status) {
     case 'done':
-      return <Badge className="bg-green-100 text-green-800 border-green-300"><CheckCircle className="mr-1 h-3 w-3" />完了</Badge>;
+      return (
+        <Badge className="border-green-300 bg-green-100 text-green-800">
+          <CheckCircle className="mr-1 h-3 w-3" />
+          完了
+        </Badge>
+      );
     case 'pending':
-      return <Badge className="bg-amber-100 text-amber-800 border-amber-300"><Clock className="mr-1 h-3 w-3" />待ち</Badge>;
+      return (
+        <Badge className="border-amber-300 bg-amber-100 text-amber-800">
+          <Clock className="mr-1 h-3 w-3" />
+          待ち
+        </Badge>
+      );
     case 'error':
-      return <Badge className="bg-red-100 text-red-800 border-red-300"><AlertCircle className="mr-1 h-3 w-3" />エラー</Badge>;
+      return (
+        <Badge className="border-red-300 bg-red-100 text-red-800">
+          <AlertCircle className="mr-1 h-3 w-3" />
+          エラー
+        </Badge>
+      );
     default:
-      return <Badge variant="outline">{status}</Badge>;
+      return <Badge variant="outline">{status ?? '不明'}</Badge>;
   }
 }
 
@@ -67,6 +88,7 @@ function StatusFilter({ currentStatus }: { currentStatus: string }) {
           variant={currentStatus === f.value ? 'default' : 'outline'}
           size="sm"
           onClick={() => router.push(`?status=${f.value}`)}
+          aria-pressed={currentStatus === f.value}
         >
           {f.label}
         </Button>
@@ -94,14 +116,19 @@ export function MasterDataTable({
   /** エラーレコードの再実行 */
   const handleRetry = async (docId: string) => {
     setRetryingDocId(docId);
-    const result = await extractSingleMasterRecord(docId);
-    setRetryingDocId(null);
 
-    if (result.success) {
-      toast.success('再抽出が完了しました');
-      router.refresh();
-    } else {
-      toast.error(result.error ?? '再抽出に失敗しました');
+    try {
+      const result = await extractSingleMasterRecord(docId);
+      if (result.success) {
+        toast.success('再抽出が完了しました');
+        router.refresh();
+      } else {
+        toast.error(result.error ?? '再抽出に失敗しました');
+      }
+    } catch {
+      toast.error('再抽出中にエラーが発生しました');
+    } finally {
+      setRetryingDocId(null);
     }
   };
 
@@ -109,7 +136,9 @@ export function MasterDataTable({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <StatusFilter currentStatus={currentStatus} />
-        <span className="text-sm text-muted-foreground">{totalCount.toLocaleString()}件</span>
+        <span className="text-sm text-muted-foreground">
+          {totalCount.toLocaleString()}件
+        </span>
       </div>
 
       <Table>
@@ -121,45 +150,65 @@ export function MasterDataTable({
             <TableHead>基準</TableHead>
             <TableHead>ステータス</TableHead>
             <TableHead>取得日時</TableHead>
-            <TableHead className="w-20"></TableHead>
+            <TableHead className="w-20">
+              <span className="sr-only">操作</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {data.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+              <TableCell
+                colSpan={7}
+                className="py-8 text-center text-muted-foreground"
+              >
                 データがありません
               </TableCell>
             </TableRow>
           ) : (
             data.map((row) => (
               <TableRow key={row.doc_id}>
-                <TableCell className="font-mono text-sm">{row.sec_code}</TableCell>
+                <TableCell className="font-mono text-sm">
+                  {row.sec_code}
+                </TableCell>
                 <TableCell className="font-medium">{row.filer_name}</TableCell>
-                <TableCell className="tabular-nums">{row.fiscal_year}</TableCell>
+                <TableCell className="tabular-nums">
+                  {row.fiscal_year}
+                </TableCell>
                 <TableCell>
                   {row.accounting_standard ? (
-                    <Badge variant="outline" className="text-xs">{row.accounting_standard}</Badge>
-                  ) : '—'}
+                    <Badge variant="outline" className="text-xs">
+                      {row.accounting_standard}
+                    </Badge>
+                  ) : (
+                    '—'
+                  )}
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={row.extraction_status} />
                   {row.error_message && (
-                    <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate" title={row.error_message}>
+                    <p
+                      className="mt-1 max-w-[200px] truncate text-xs text-red-500"
+                      title={row.error_message}
+                    >
                       {row.error_message}
                     </p>
                   )}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
-                  {row.fetched_at ? new Date(row.fetched_at).toLocaleString('ja-JP') : '—'}
+                  {row.fetched_at
+                    ? new Date(row.fetched_at).toLocaleString('ja-JP')
+                    : '—'}
                 </TableCell>
                 <TableCell>
-                  {(row.extraction_status === 'error' || row.extraction_status === 'pending') && (
+                  {(row.extraction_status === 'error' ||
+                    row.extraction_status === 'pending') && (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => handleRetry(row.doc_id)}
                       disabled={retryingDocId === row.doc_id}
+                      aria-label={`${row.filer_name} ${row.fiscal_year}年度を再抽出`}
                     >
                       {retryingDocId === row.doc_id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -182,7 +231,9 @@ export function MasterDataTable({
             variant="outline"
             size="sm"
             disabled={currentPage <= 1}
-            onClick={() => router.push(`?status=${currentStatus}&page=${currentPage - 1}`)}
+            onClick={() =>
+              router.push(`?status=${currentStatus}&page=${currentPage - 1}`)
+            }
           >
             前へ
           </Button>
@@ -193,7 +244,9 @@ export function MasterDataTable({
             variant="outline"
             size="sm"
             disabled={currentPage >= totalPages}
-            onClick={() => router.push(`?status=${currentStatus}&page=${currentPage + 1}`)}
+            onClick={() =>
+              router.push(`?status=${currentStatus}&page=${currentPage + 1}`)
+            }
           >
             次へ
           </Button>

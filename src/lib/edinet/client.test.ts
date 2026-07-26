@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { filterAnnualReports } from './client';
+import { afterEach, describe, it, expect, vi } from 'vitest';
+import { fetchDocumentList, filterAnnualReports } from './client';
 import type { EdinetDocument } from './types';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 function makeDoc(overrides: Partial<EdinetDocument> = {}): EdinetDocument {
   return {
@@ -45,7 +50,7 @@ describe('filterAnnualReports', () => {
     ];
     const result = filterAnnualReports(docs);
     expect(result).toHaveLength(1);
-    expect(result[0].docID).toBe('S1000001');
+    expect(result[0]?.docID).toBe('S1000001');
   });
 
   it('xbrlFlag=0 かつ csvFlag=0 の書類を除外する', () => {
@@ -102,5 +107,65 @@ describe('filterAnnualReports', () => {
     ];
     const result = filterAnnualReports(docs);
     expect(result).toHaveLength(2);
+  });
+});
+
+describe('fetchDocumentList', () => {
+  it('EDINET API v2 の必須クエリを組み立てる', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchDocumentList('2025-06-15', 'test-api-key');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.origin + url.pathname).toBe(
+      'https://api.edinet-fsa.go.jp/api/v2/documents.json'
+    );
+    expect(url.searchParams.get('date')).toBe('2025-06-15');
+    expect(url.searchParams.get('type')).toBe('2');
+    expect(url.searchParams.get('Subscription-Key')).toBe('test-api-key');
+  });
+
+  it('401 は待機しても回復しないため再試行しない', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 401,
+        statusText: 'Unauthorized',
+      })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      fetchDocumentList('2025-06-15', 'invalid-api-key')
+    ).rejects.toThrow('EDINET APIキーが無効です');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('一時的なサーバーエラーは待機後に再試行する', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 503,
+          statusText: 'Service Unavailable',
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ results: [] }), { status: 200 })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const pendingResponse = fetchDocumentList('2025-06-15', 'test-api-key');
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    await expect(pendingResponse).resolves.toEqual({ results: [] });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

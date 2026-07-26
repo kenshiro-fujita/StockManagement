@@ -1,3 +1,7 @@
+/**
+ * 認証エラーコードを安全な利用者向けメッセージへ変換して表示します。
+ */
+import { AuthPageShell } from '@/components/layout/auth-page-shell';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -16,54 +20,57 @@ const errorMessages: Record<string, string> = {
     'トークンが期限切れまたは無効です。再度サインアップしてください。',
 };
 
-async function ErrorContent({
+async function ErrorMessage({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const params = await searchParams;
-  const message = params?.error
-    ? (errorMessages[params.error] ?? '認証処理中にエラーが発生しました。')
+  const { error } = await searchParams;
+  const message = error
+    ? (errorMessages[error] ?? '認証処理中にエラーが発生しました。')
     : '予期しないエラーが発生しました。';
 
-  return <p className="text-sm text-muted-foreground">{message}</p>;
+  return (
+    <p className="text-sm text-muted-foreground" role="alert">
+      {message}
+    </p>
+  );
 }
 
 export default function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">エラーが発生しました</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Suspense>
-                <ErrorContent searchParams={searchParams} />
-              </Suspense>
-              <div className="mt-4 flex flex-col gap-2 text-center text-sm">
-                <Link
-                  href="/auth/sign-up"
-                  className="underline underline-offset-4"
-                >
-                  アカウント作成
-                </Link>
-                <Link
-                  href="/auth/login"
-                  className="underline underline-offset-4"
-                >
-                  ログイン
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+    <AuthPageShell>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">エラーが発生しました</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Suspense
+            fallback={
+              <p className="text-sm text-muted-foreground" role="status">
+                エラー内容を確認しています...
+              </p>
+            }
+          >
+            <ErrorMessage searchParams={searchParams} />
+          </Suspense>
+          <nav
+            className="mt-4 flex flex-col gap-2 text-center text-sm"
+            aria-label="認証ページ"
+          >
+            <Link href="/auth/sign-up" className="underline underline-offset-4">
+              アカウント作成
+            </Link>
+            <Link href="/auth/login" className="underline underline-offset-4">
+              ログイン
+            </Link>
+          </nav>
+        </CardContent>
+      </Card>
+    </AuthPageShell>
   );
 }

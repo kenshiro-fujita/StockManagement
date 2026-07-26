@@ -9,6 +9,7 @@
  */
 import type { ExtractionSummary } from './extraction';
 import type { MetricKey } from './taxonomy';
+import type { FullFinancialDataRow } from '@/lib/types/financial-data';
 
 /** MetricKey → financial_data カラム名の対応表（保存対象のみ。eps_basic は保存しない） */
 export const METRIC_TO_COLUMN = {
@@ -28,25 +29,42 @@ export const METRIC_TO_COLUMN = {
   current_liabilities: 'current_liabilities',
   non_current_liabilities: 'non_current_liabilities',
   shareholders_equity: 'shareholders_equity',
-} as const satisfies Partial<Record<MetricKey, string>>;
+} as const satisfies Partial<Record<MetricKey, keyof FullFinancialDataRow>>;
+
+/** 保存対象として定義した MetricKey。eps_basic など表示専用値は含まれない。 */
+type PersistedMetricKey = keyof typeof METRIC_TO_COLUMN;
+
+/** マッピングの値から導出した financial_data の保存対象カラム。 */
+export type FinancialColumn = (typeof METRIC_TO_COLUMN)[PersistedMetricKey];
+
+/** Object.entries で失われるキーと値の対応関係を、この境界で復元する。 */
+type MetricColumnEntry = {
+  [Key in PersistedMetricKey]: readonly [Key, (typeof METRIC_TO_COLUMN)[Key]];
+}[PersistedMetricKey];
+
+function metricColumnEntries(): MetricColumnEntry[] {
+  return Object.entries(METRIC_TO_COLUMN) as MetricColumnEntry[];
+}
 
 /** financial_data に保存する財務カラム名の一覧（edinet_master とのコピーにも使う） */
-export const FINANCIAL_COLUMNS = Object.values(METRIC_TO_COLUMN);
+export const FINANCIAL_COLUMNS: readonly FinancialColumn[] = Object.freeze(
+  Object.values(METRIC_TO_COLUMN)
+);
 
-export type FinancialColumnValues = Record<
-  (typeof METRIC_TO_COLUMN)[keyof typeof METRIC_TO_COLUMN],
-  number | null
->;
+export type FinancialColumnValues = Record<FinancialColumn, number | null>;
 
 /** 抽出結果から financial_data / edinet_master の財務カラム値を組み立てる */
 export function extractionToFinancialColumns(
-  extraction: ExtractionSummary,
+  extraction: ExtractionSummary
 ): FinancialColumnValues {
   const byKey = new Map(extraction.results.map((r) => [r.metricKey, r.value]));
 
-  const columns = {} as Record<string, number | null>;
-  for (const [metricKey, column] of Object.entries(METRIC_TO_COLUMN)) {
-    columns[column] = byKey.get(metricKey as MetricKey) ?? null;
-  }
-  return columns as FinancialColumnValues;
+  // Object.fromEntries の標準型は具体的なキーを保持しないため、上で検証済みの
+  // MetricColumnEntry から生成した直後だけ FinancialColumnValues として扱う。
+  return Object.fromEntries(
+    metricColumnEntries().map(([metricKey, column]) => [
+      column,
+      byKey.get(metricKey) ?? null,
+    ])
+  ) as FinancialColumnValues;
 }

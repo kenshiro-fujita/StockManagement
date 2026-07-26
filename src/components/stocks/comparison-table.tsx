@@ -43,7 +43,10 @@ type ComparisonStock = {
   results: IndicatorResults | null;
 };
 
-const FORMAT_FNS: Record<ComparisonIndicator['format'], (v: number | null) => string> = {
+const FORMAT_FNS: Record<
+  ComparisonIndicator['format'],
+  (v: number | null) => string
+> = {
   stockPrice: formatStockPrice,
   percent: formatPercent,
   percentUnsigned: formatPercentUnsigned,
@@ -66,7 +69,9 @@ export function ComparisonTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="sticky left-0 z-10 bg-background min-w-[160px]">指標</TableHead>
+            <TableHead className="sticky left-0 z-10 min-w-[160px] bg-background">
+              指標
+            </TableHead>
             {stocks.map((stock) => (
               <TableHead key={stock.id} className="min-w-[140px] text-center">
                 <div className="flex flex-col items-center gap-1">
@@ -76,7 +81,7 @@ export function ComparisonTable({
                   >
                     {stock.stock_code}
                   </Link>
-                  <span className="text-xs font-normal text-muted-foreground truncate max-w-[120px]">
+                  <span className="max-w-[120px] truncate text-xs font-normal text-muted-foreground">
                     {stock.company_name}
                   </span>
                   {onRemove && (
@@ -98,13 +103,18 @@ export function ComparisonTable({
         <TableBody>
           {/* ロースター行 */}
           <TableRow>
-            <TableCell className="sticky left-0 z-10 bg-background font-medium text-muted-foreground text-sm">
+            <TableCell className="sticky left-0 z-10 bg-background text-sm font-medium text-muted-foreground">
               ロースター
             </TableCell>
             {stocks.map((stock) => (
               <TableCell key={stock.id} className="text-center">
                 {stock.rosterCategory ? (
-                  <Badge variant="outline" className={ROSTER_BADGE_STYLES[stock.rosterCategory].className}>
+                  <Badge
+                    variant="outline"
+                    className={
+                      ROSTER_BADGE_STYLES[stock.rosterCategory].className
+                    }
+                  >
                     {ROSTER_CATEGORY_LABELS[stock.rosterCategory]}
                   </Badge>
                 ) : (
@@ -116,13 +126,18 @@ export function ComparisonTable({
 
           {/* 評価行 */}
           <TableRow>
-            <TableCell className="sticky left-0 z-10 bg-background font-medium text-muted-foreground text-sm">
+            <TableCell className="sticky left-0 z-10 bg-background text-sm font-medium text-muted-foreground">
               評価
             </TableCell>
             {stocks.map((stock) => (
               <TableCell key={stock.id} className="text-center">
                 {stock.rating != null ? (
-                  <span className="text-yellow-500">{'★'.repeat(stock.rating)}<span className="text-muted-foreground text-xs ml-1">{stock.rating}/5</span></span>
+                  <span className="text-yellow-500">
+                    {'★'.repeat(stock.rating)}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      {stock.rating}/5
+                    </span>
+                  </span>
                 ) : (
                   <span className="text-muted-foreground">{NULL_DISPLAY}</span>
                 )}
@@ -132,12 +147,14 @@ export function ComparisonTable({
 
           {/* 優先順行 */}
           <TableRow>
-            <TableCell className="sticky left-0 z-10 bg-background font-medium text-muted-foreground text-sm">
+            <TableCell className="sticky left-0 z-10 bg-background text-sm font-medium text-muted-foreground">
               購入優先順
             </TableCell>
             {stocks.map((stock) => (
               <TableCell key={stock.id} className="text-center tabular-nums">
-                {stock.buyPriority ?? <span className="text-muted-foreground">{NULL_DISPLAY}</span>}
+                {stock.buyPriority ?? (
+                  <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                )}
               </TableCell>
             ))}
           </TableRow>
@@ -150,7 +167,7 @@ export function ComparisonTable({
               <TableRow>
                 <TableCell
                   colSpan={stocks.length + 1}
-                  className="sticky left-0 z-10 bg-muted/50 font-semibold text-sm"
+                  className="sticky left-0 z-10 bg-muted/50 text-sm font-semibold"
                 >
                   {category.title}
                 </TableCell>
@@ -162,15 +179,15 @@ export function ComparisonTable({
 
                 return (
                   <TableRow key={indicator.field}>
-                    <TableCell className="sticky left-0 z-10 bg-background text-muted-foreground text-sm">
+                    <TableCell className="sticky left-0 z-10 bg-background text-sm text-muted-foreground">
                       {indicator.label}
                     </TableCell>
-                    {values.map((value, i) => (
+                    {stocks.map((stock, index) => (
                       <TableCell
-                        key={stocks[i].id}
-                        className={`text-center tabular-nums ${i === bestIdx ? 'font-bold text-teal-700' : ''}`}
+                        key={stock.id}
+                        className={`text-center tabular-nums ${index === bestIdx ? 'font-bold text-teal-700' : ''}`}
                       >
-                        {formatFn(value)}
+                        {formatFn(values[index] ?? null)}
                       </TableCell>
                     ))}
                   </TableRow>

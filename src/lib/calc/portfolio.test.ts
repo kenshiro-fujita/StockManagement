@@ -10,9 +10,27 @@ import {
 describe('calcPosition（移動平均法）', () => {
   it('複数買い → 売りで平均取得単価と実現損益を正しく算出する', () => {
     const txs: TransactionInput[] = [
-      { transaction_type: 'buy', trade_date: '2024-01-10', quantity: 100, unit_price: 1000, fee: 500 },
-      { transaction_type: 'buy', trade_date: '2024-03-10', quantity: 100, unit_price: 1200, fee: 500 },
-      { transaction_type: 'sell', trade_date: '2024-06-10', quantity: 50, unit_price: 1500, fee: 500 },
+      {
+        transaction_type: 'buy',
+        trade_date: '2024-01-10',
+        quantity: 100,
+        unit_price: 1000,
+        fee: 500,
+      },
+      {
+        transaction_type: 'buy',
+        trade_date: '2024-03-10',
+        quantity: 100,
+        unit_price: 1200,
+        fee: 500,
+      },
+      {
+        transaction_type: 'sell',
+        trade_date: '2024-06-10',
+        quantity: 50,
+        unit_price: 1500,
+        fee: 500,
+      },
     ];
     const p = calcPosition(txs);
     // 買い後: 簿価 100,500 + 120,500 = 221,000 / 200株 → 平均 1,105
@@ -28,8 +46,20 @@ describe('calcPosition（移動平均法）', () => {
 
   it('全株売却で保有0・平均単価null', () => {
     const txs: TransactionInput[] = [
-      { transaction_type: 'buy', trade_date: '2024-01-10', quantity: 100, unit_price: 1000, fee: 0 },
-      { transaction_type: 'sell', trade_date: '2024-02-10', quantity: 100, unit_price: 1200, fee: 0 },
+      {
+        transaction_type: 'buy',
+        trade_date: '2024-01-10',
+        quantity: 100,
+        unit_price: 1000,
+        fee: 0,
+      },
+      {
+        transaction_type: 'sell',
+        trade_date: '2024-02-10',
+        quantity: 100,
+        unit_price: 1200,
+        fee: 0,
+      },
     ];
     const p = calcPosition(txs);
     expect(p.quantity).toBe(0);
@@ -40,8 +70,20 @@ describe('calcPosition（移動平均法）', () => {
 
   it('約定日が前後しても日付昇順で集計される', () => {
     const txs: TransactionInput[] = [
-      { transaction_type: 'sell', trade_date: '2024-06-10', quantity: 50, unit_price: 1500, fee: 0 },
-      { transaction_type: 'buy', trade_date: '2024-01-10', quantity: 100, unit_price: 1000, fee: 0 },
+      {
+        transaction_type: 'sell',
+        trade_date: '2024-06-10',
+        quantity: 50,
+        unit_price: 1500,
+        fee: 0,
+      },
+      {
+        transaction_type: 'buy',
+        trade_date: '2024-01-10',
+        quantity: 100,
+        unit_price: 1000,
+        fee: 0,
+      },
     ];
     const p = calcPosition(txs);
     expect(p.quantity).toBe(50);
@@ -51,8 +93,20 @@ describe('calcPosition（移動平均法）', () => {
 
   it('保有を超える売却は保有分までに丸める（不整合データの保険）', () => {
     const txs: TransactionInput[] = [
-      { transaction_type: 'buy', trade_date: '2024-01-10', quantity: 100, unit_price: 1000, fee: 0 },
-      { transaction_type: 'sell', trade_date: '2024-02-10', quantity: 200, unit_price: 1200, fee: 0 },
+      {
+        transaction_type: 'buy',
+        trade_date: '2024-01-10',
+        quantity: 100,
+        unit_price: 1000,
+        fee: 0,
+      },
+      {
+        transaction_type: 'sell',
+        trade_date: '2024-02-10',
+        quantity: 200,
+        unit_price: 1200,
+        fee: 0,
+      },
     ];
     const p = calcPosition(txs);
     expect(p.quantity).toBe(0);
@@ -87,35 +141,69 @@ describe('calcPositionValuation', () => {
   it('現在価格nullまたは未保有はnull', () => {
     expect(calcPositionValuation(position, null)).toBeNull();
     expect(
-      calcPositionValuation({ ...position, quantity: 0, bookValue: 0 }, 1400),
+      calcPositionValuation({ ...position, quantity: 0, bookValue: 0 }, 1400)
     ).toBeNull();
   });
 });
 
 describe('getTradeSignal', () => {
   it('現在価格が理想買値以下なら買いシグナル', () => {
-    const r = getTradeSignal({ currentPrice: 400, theoryPrice: 1000, idealBuyPrice: 500, hasPosition: false });
+    const r = getTradeSignal({
+      currentPrice: 400,
+      theoryPrice: 1000,
+      idealBuyPrice: 500,
+      hasPosition: false,
+    });
     expect(r.signal).toBe('buy');
   });
 
   it('保有あり・現在価格が理論株価以上なら売りシグナル', () => {
-    const r = getTradeSignal({ currentPrice: 1100, theoryPrice: 1000, idealBuyPrice: 500, hasPosition: true });
+    const r = getTradeSignal({
+      currentPrice: 1100,
+      theoryPrice: 1000,
+      idealBuyPrice: 500,
+      hasPosition: true,
+    });
     expect(r.signal).toBe('sell');
   });
 
   it('保有なし・割高でも売りにはしない（様子見）', () => {
-    const r = getTradeSignal({ currentPrice: 1100, theoryPrice: 1000, idealBuyPrice: 500, hasPosition: false });
+    const r = getTradeSignal({
+      currentPrice: 1100,
+      theoryPrice: 1000,
+      idealBuyPrice: 500,
+      hasPosition: false,
+    });
     expect(r.signal).toBe('hold');
   });
 
   it('理想買値と理論株価の間は様子見', () => {
-    const r = getTradeSignal({ currentPrice: 700, theoryPrice: 1000, idealBuyPrice: 500, hasPosition: true });
+    const r = getTradeSignal({
+      currentPrice: 700,
+      theoryPrice: 1000,
+      idealBuyPrice: 500,
+      hasPosition: true,
+    });
     expect(r.signal).toBe('hold');
   });
 
   it('理論株価が未算出なら判定しない', () => {
-    expect(getTradeSignal({ currentPrice: 700, theoryPrice: null, idealBuyPrice: null, hasPosition: true }).signal).toBe('hold');
-    expect(getTradeSignal({ currentPrice: 700, theoryPrice: -100, idealBuyPrice: null, hasPosition: true }).signal).toBe('hold');
+    expect(
+      getTradeSignal({
+        currentPrice: 700,
+        theoryPrice: null,
+        idealBuyPrice: null,
+        hasPosition: true,
+      }).signal
+    ).toBe('hold');
+    expect(
+      getTradeSignal({
+        currentPrice: 700,
+        theoryPrice: -100,
+        idealBuyPrice: null,
+        hasPosition: true,
+      }).signal
+    ).toBe('hold');
   });
 });
 

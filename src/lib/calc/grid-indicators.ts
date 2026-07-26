@@ -33,7 +33,11 @@ export type GridIndicator = {
   /** 単位（表示用） */
   unit: string;
   /** 計算関数: 当期の入力値 + パラメータ → 表示文字列 */
-  calc: (values: GridValues, params: ParametersRow | null, prevValues?: GridValues | null) => string | null;
+  calc: (
+    values: GridValues,
+    params: ParametersRow | null,
+    prevValues?: GridValues | null
+  ) => string | null;
 };
 
 /** グリッドの1列（1年度）分の入力値（百万円→円変換済み） */
@@ -83,26 +87,47 @@ function yen(value: number | null): string | null {
 }
 
 /**
+ * 支払利息率と現行の負債調達コストは同一定義なので、値の算出を共有する。
+ *
+ * 税効果を含める仕様が確定するまでは表示行を分けたままにし、現在の数値契約だけを
+ * 一箇所へ集約する。
+ */
+function gridInterestRate(values: GridValues): number | null {
+  if (
+    values.interest_expense == null ||
+    values.interest_bearing_debt == null ||
+    values.interest_bearing_debt === 0
+  ) {
+    return null;
+  }
+  return (values.interest_expense / values.interest_bearing_debt) * 100;
+}
+
+/**
  * 理論株価をエンジン経由で算出する（事業価値→資産価値→理論株価のチェーン）
  * theory_price / safety_margin / safety_rate で共有し、式の重複を排除する
  */
-function gridTheoryPrice(v: GridValues, params: ParametersRow | null): number | null {
+function gridTheoryPrice(
+  v: GridValues,
+  params: ParametersRow | null
+): number | null {
   const equity = gridEquity(v);
   // 営業利益・自己資本は 0 も正当な値（赤字転落・債務超過）なので == null で判定する
-  if (v.operating_income == null || equity == null || params == null) return null;
+  if (v.operating_income == null || equity == null || params == null)
+    return null;
   const businessValue = calcBusinessValue(
     v.operating_income,
     params.tax_rate,
     params.discount_rate,
     params.growth_rate,
-    params.cap_multiplier,
+    params.cap_multiplier
   ).value;
   if (businessValue == null) return null;
   return calcTheoryPrice(
     businessValue,
     equity,
     v.interest_bearing_debt ?? 0,
-    v.shares_outstanding,
+    v.shares_outstanding
   ).value;
 }
 
@@ -147,7 +172,9 @@ export const GRID_INDICATORS: GridIndicator[] = [
     calc: (v, _p, prev) => {
       // 当期売上 0 は -100% として算出可能なので == null で判定（truthy 判定だと 0 を弾く）
       if (prev?.revenue == null || v.revenue == null) return null;
-      return fmtPct(calcYoYGrowthRate(v.revenue, prev.revenue, '売上高', 'revenue').value);
+      return fmtPct(
+        calcYoYGrowthRate(v.revenue, prev.revenue, '売上高', 'revenue').value
+      );
     },
   },
   {
@@ -156,7 +183,10 @@ export const GRID_INDICATORS: GridIndicator[] = [
     unit: '%',
     calc: (v, _p, prev) => {
       if (prev?.net_income == null || v.net_income == null) return null;
-      return fmtPct(calcYoYGrowthRate(v.net_income, prev.net_income, '純利益', 'net_income').value);
+      return fmtPct(
+        calcYoYGrowthRate(v.net_income, prev.net_income, '純利益', 'net_income')
+          .value
+      );
     },
   },
   {
@@ -166,9 +196,15 @@ export const GRID_INDICATORS: GridIndicator[] = [
     calc: (v, params) => {
       const equity = gridEquity(v);
       // 税率はエンジンと同じくパラメータ必須（独自のデフォルト 0.3 を持つと前提が食い違う）
-      if (v.operating_income == null || equity == null || params == null) return null;
+      if (v.operating_income == null || equity == null || params == null)
+        return null;
       return fmtPct(
-        calcROIC(v.operating_income, params.tax_rate, equity, v.interest_bearing_debt ?? 0).value,
+        calcROIC(
+          v.operating_income,
+          params.tax_rate,
+          equity,
+          v.interest_bearing_debt ?? 0
+        ).value
       );
     },
   },
@@ -196,7 +232,13 @@ export const GRID_INDICATORS: GridIndicator[] = [
     label: 'PER',
     unit: '倍',
     calc: (v) => {
-      if (v.current_stock_price == null || v.net_income == null || v.shares_outstanding == null || v.shares_outstanding === 0) return null;
+      if (
+        v.current_stock_price == null ||
+        v.net_income == null ||
+        v.shares_outstanding == null ||
+        v.shares_outstanding === 0
+      )
+        return null;
       // エンジンと同じく丸め前の生EPSからPERを計算する
       const rawEps = v.net_income / v.shares_outstanding;
       const per = calcPER(v.current_stock_price, rawEps).value;
@@ -210,7 +252,11 @@ export const GRID_INDICATORS: GridIndicator[] = [
     calc: (v) => {
       const equity = gridEquity(v);
       if (equity == null) return null;
-      const pbr = calcPBR(v.current_stock_price, v.shares_outstanding, equity).value;
+      const pbr = calcPBR(
+        v.current_stock_price,
+        v.shares_outstanding,
+        equity
+      ).value;
       return pbr == null ? null : pbr.toFixed(2);
     },
   },
@@ -226,8 +272,7 @@ export const GRID_INDICATORS: GridIndicator[] = [
     unit: '%',
     calc: (v) => {
       // 支払利息 0 は利息率 0% として正当（truthy 判定だと弾かれていた）
-      if (v.interest_expense == null || v.interest_bearing_debt == null || v.interest_bearing_debt === 0) return null;
-      return fmtPct((v.interest_expense / v.interest_bearing_debt) * 100);
+      return fmtPct(gridInterestRate(v));
     },
   },
   {
@@ -235,10 +280,7 @@ export const GRID_INDICATORS: GridIndicator[] = [
     label: '負債調達コスト',
     unit: '%',
     // 注: 現仕様では支払利息率と同一定義（税効果を掛けるかは仕様未決定のため変更しない）
-    calc: (v) => {
-      if (v.interest_expense == null || v.interest_bearing_debt == null || v.interest_bearing_debt === 0) return null;
-      return fmtPct((v.interest_expense / v.interest_bearing_debt) * 100);
-    },
+    calc: (v) => fmtPct(gridInterestRate(v)),
   },
   {
     key: 'business_value',
@@ -252,8 +294,8 @@ export const GRID_INDICATORS: GridIndicator[] = [
           params.tax_rate,
           params.discount_rate,
           params.growth_rate,
-          params.cap_multiplier,
-        ).value,
+          params.cap_multiplier
+        ).value
       );
     },
   },
@@ -275,7 +317,10 @@ export const GRID_INDICATORS: GridIndicator[] = [
     unit: '円',
     calc: (v, params) => {
       if (v.current_stock_price == null) return null;
-      return yen(calcSafetyMargin(gridTheoryPrice(v, params), v.current_stock_price).value);
+      return yen(
+        calcSafetyMargin(gridTheoryPrice(v, params), v.current_stock_price)
+          .value
+      );
     },
   },
   {
@@ -285,7 +330,9 @@ export const GRID_INDICATORS: GridIndicator[] = [
     calc: (v, params) => {
       if (v.current_stock_price == null) return null;
       // エンジン経由なので「理論株価 ≤ 0 のとき算出不可」のガードも自動的に効く
-      return fmtPct(calcSafetyRate(gridTheoryPrice(v, params), v.current_stock_price).value);
+      return fmtPct(
+        calcSafetyRate(gridTheoryPrice(v, params), v.current_stock_price).value
+      );
     },
   },
   {
@@ -304,7 +351,9 @@ export const GRID_INDICATORS: GridIndicator[] = [
           ? (v.interest_expense / debt) * (1 - params.tax_rate)
           : 0;
       const costOfEquity = params.discount_rate;
-      const wacc = (costOfEquity * equity) / totalCapital + (costOfDebt * debt) / totalCapital;
+      const wacc =
+        (costOfEquity * equity) / totalCapital +
+        (costOfDebt * debt) / totalCapital;
       return (wacc * 100).toFixed(2) + '%';
     },
   },

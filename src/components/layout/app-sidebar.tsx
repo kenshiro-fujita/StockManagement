@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { LayoutList, LogOut, Settings, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { createClient } from '@/lib/supabase/client';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   Sidebar,
@@ -39,7 +39,10 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <Link href="/stocks" className="flex items-center gap-2 px-2 py-1 hover:opacity-80 transition-opacity">
+        <Link
+          href="/stocks"
+          className="flex items-center gap-2 px-2 py-1 transition-opacity hover:opacity-80"
+        >
           <span className="text-sidebar-foreground text-lg font-bold">
             株式分析ツール
           </span>
@@ -57,7 +60,8 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={
-                    (pathname === '/stocks' || pathname.startsWith('/stocks/')) &&
+                    (pathname === '/stocks' ||
+                      pathname.startsWith('/stocks/')) &&
                     pathname !== '/stocks/portfolio'
                   }
                   asChild
@@ -116,9 +120,17 @@ export function AppSidebar({ stocks = [] }: { stocks?: SidebarStock[] }) {
                         </span>
                         <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
                           {stock.rosterCategory && (
-                            <span className="shrink-0">{ROSTER_CATEGORY_SHORT_LABELS[stock.rosterCategory]}</span>
+                            <span className="shrink-0">
+                              {
+                                ROSTER_CATEGORY_SHORT_LABELS[
+                                  stock.rosterCategory
+                                ]
+                              }
+                            </span>
                           )}
-                          <span className="tabular-nums">{formatStockPrice(stock.theoryPrice)}</span>
+                          <span className="tabular-nums">
+                            {formatStockPrice(stock.theoryPrice)}
+                          </span>
                         </span>
                       </Link>
                     </SidebarMenuButton>
@@ -151,10 +163,15 @@ function SidebarLogoutButton() {
     setIsLoading(true);
 
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        throw error;
+      }
       router.refresh();
       router.push('/');
     } catch {
+      toast.error('モード選択画面への切り替えに失敗しました');
+    } finally {
       setIsLoading(false);
     }
   };

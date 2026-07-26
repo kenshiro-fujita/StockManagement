@@ -14,16 +14,16 @@
  */
 import JSZip from 'jszip';
 import iconv from 'iconv-lite';
-import { detectAccountingStandard } from './taxonomy';
 import {
-  extractAllMetrics,
-  findDeiRawValue,
+  createExtractionSummary,
+  type ExtractionSummary,
   type NormalizedFact,
 } from './extraction';
+import { extractLocalName, normalizeNumber } from './fact-utils';
 
 // 抽出結果の型は extraction.ts に一本化した。既存の import 元を壊さないため再エクスポートする
 export type { ExtractionResult, ExtractionSummary } from './extraction';
-import type { ExtractionSummary } from './extraction';
+export { normalizeNumber } from './fact-utils';
 
 /**
  * CSV から抽出した1つの Fact（XBRL の要素1つに対応）
@@ -40,10 +40,27 @@ export type CsvFact = {
   value: string;
 };
 
+/** EDINET の各セルはダブルクォート囲みなので、比較・数値化前に除去する。 */
+function parseTsvRow(line: string): string[] {
+  return line.split('\t').map((cell) => cell.replace(/"/g, '').trim());
+}
+
+/** ヘッダー名が見つからない旧形式では、既知の列位置へフォールバックする。 */
+function resolveColumnIndex(
+  headers: readonly string[],
+  name: string,
+  fallbackIndex: number
+): number {
+  const index = headers.indexOf(name);
+  return index >= 0 ? index : fallbackIndex;
+}
+
 /**
  * ZIP (type=5) から CSV ファイルを抽出してデコードする
  */
-export async function extractCsvFromZip(zipData: ArrayBuffer): Promise<string[]> {
+export async function extractCsvFromZip(
+  zipData: ArrayBuffer
+): Promise<string[]> {
   const zip = await JSZip.loadAsync(zipData);
   const csvContents: string[] = [];
 
@@ -79,34 +96,32 @@ export function parseTsvToFacts(tsv: string): CsvFact[] {
   if (lines.length < 2) return [];
 
   // ヘッダー行から列名→インデックスのマッピングを構築
-  const headerCols = lines[0].split('\t').map((c) => c.replace(/"/g, '').trim());
-  const colIdx = (name: string): number => {
-    const i = headerCols.indexOf(name);
-    return i >= 0 ? i : -1;
-  };
+  const headerLine = lines[0];
+  if (!headerLine) return [];
+  const headerColumns = parseTsvRow(headerLine);
 
   // EDINET CSV の列名で列インデックスを特定
-  const iElem = colIdx('要素ID') >= 0 ? colIdx('要素ID') : 0;
-  const iCtx = colIdx('コンテキストID') >= 0 ? colIdx('コンテキストID') : 2;
-  const iUnit = colIdx('ユニットID') >= 0 ? colIdx('ユニットID') : 6;
-  const iVal = colIdx('値') >= 0 ? colIdx('値') : 8;
+  const elementIndex = resolveColumnIndex(headerColumns, '要素ID', 0);
+  const contextIndex = resolveColumnIndex(headerColumns, 'コンテキストID', 2);
+  const unitIndex = resolveColumnIndex(headerColumns, 'ユニットID', 6);
+  const valueIndex = resolveColumnIndex(headerColumns, '値', 8);
 
   const facts: CsvFact[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split('\t').map((c) => c.replace(/"/g, '').trim());
-    if (cols.length <= iElem) continue;
+    const line = lines[i];
+    if (!line) continue;
+    const columns = parseTsvRow(line);
+    if (columns.length <= elementIndex) continue;
 
-    const elementName = cols[iElem] ?? '';
-    const contextId = cols[iCtx] ?? '';
-    const unitId = cols[iUnit] ?? '';
-    const value = cols[iVal] ?? '';
+    const elementName = columns[elementIndex] ?? '';
+    const contextId = columns[contextIndex] ?? '';
+    const unitId = columns[unitIndex] ?? '';
+    const value = columns[valueIndex] ?? '';
 
     if (!elementName) continue;
 
-    const localName = elementName.includes(':')
-      ? elementName.split(':').pop()!
-      : elementName;
+    const localName = extractLocalName(elementName);
 
     facts.push({ elementName, localName, contextId, unitId, value });
   }
@@ -115,45 +130,11 @@ export function parseTsvToFacts(tsv: string): CsvFact[] {
 }
 
 /**
- * 日本の有価証券報告書に特有の数値表記を、JavaScript の number に正規化する
- *
- * 処理する表記パターン:
- * - 全角数字（０１２...） → 半角に変換
- * - カンマ区切り（1,234,567） → 除去
- * - △/▲ マイナス（△1,234） → -1234
- * - 括弧マイナス（(1,234)） → -1234
- * - 全角マイナス（−、–、—、―） → 半角ハイフンに統一
- * - ダッシュ単体（—） → null（「該当なし」の意味）
- */
-export function normalizeNumber(raw: string): number | null {
-  if (!raw) return null;
-
-  let s = raw
-    .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0)) // 全角→半角
-    .replace(/[,，\s]/g, '')   // カンマ・スペース除去
-    .replace(/[△▲]/g, '-')    // 三角マイナス → ハイフン
-    .replace(/[−–—―‐]/g, '-'); // 各種全角マイナス → ハイフン
-
-  // 括弧マイナス: (1,234) → -1234
-  const parenMatch = s.match(/^\((.+)\)$/);
-  if (parenMatch) {
-    s = '-' + parenMatch[1];
-  }
-
-  // ダッシュ単体は「該当なし」（null）として扱う
-  // （全角ダッシュは上の置換で既に '-' へ統一済みなので、ここでは半角のみ判定すればよい）
-  if (s === '-' || s === '') return null;
-
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
  * CsvFact を共有抽出モジュールの NormalizedFact に変換する
  * 数値化はここで一度だけ行い、生テキストは rawValue として保持する
  * （DEI 系の文字列ファクトは数値化すると null に潰れるため）
  */
-function toNormalizedFacts(facts: CsvFact[]): NormalizedFact[] {
+function toNormalizedFacts(facts: readonly CsvFact[]): NormalizedFact[] {
   return facts.map((f) => ({
     localName: f.localName,
     contextId: f.contextId,
@@ -169,7 +150,7 @@ function toNormalizedFacts(facts: CsvFact[]): NormalizedFact[] {
  * 指標の選択ロジックは extraction.ts（CSV/XBRL 共通）に委譲する
  */
 export async function extractFinancialMetrics(
-  zipData: ArrayBuffer,
+  zipData: ArrayBuffer
 ): Promise<ExtractionSummary> {
   const csvContents = await extractCsvFromZip(zipData);
   const allFacts: CsvFact[] = [];
@@ -180,14 +161,5 @@ export async function extractFinancialMetrics(
 
   const facts = toNormalizedFacts(allFacts);
 
-  // 会計基準と決算期末は文字列ファクト（rawValue）から判定する
-  const standard = detectAccountingStandard(findDeiRawValue(facts, 'AccountingStandardsDEI'));
-  const periodEnd = findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI');
-
-  return {
-    accountingStandard: standard,
-    periodEnd,
-    sourceType: 'csv',
-    results: extractAllMetrics(facts, standard),
-  };
+  return createExtractionSummary(facts, 'csv');
 }

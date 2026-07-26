@@ -18,10 +18,16 @@ export async function getAIProvider(): Promise<AIProvider> {
   const apiKey = userKey || process.env.ANTHROPIC_API_KEY;
 
   if (!apiKey) {
-    throw new Error('Anthropic APIキーが設定されていません。ユーザー設定画面から登録してください。');
+    throw new Error(
+      'Anthropic APIキーが設定されていません。ユーザー設定画面から登録してください。'
+    );
   }
 
   return new ClaudeProvider(apiKey);
 }
 
-export type { AIProvider, AIResearchRequest, AIResearchResponse } from './provider';
+export type {
+  AIProvider,
+  AIResearchRequest,
+  AIResearchResponse,
+} from './provider';

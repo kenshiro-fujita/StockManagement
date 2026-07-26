@@ -35,11 +35,21 @@ describe('createFinancialDataSchema', () => {
       shares_outstanding: '1000000',
       interest_expense: '5000',
       current_stock_price: '1500',
+      cash_and_equivalents: '700000',
+      current_assets: '1800000',
+      investments_and_other_assets: '400000',
+      current_liabilities: '900000',
+      non_current_liabilities: '800000',
+      shareholders_equity: '1900000',
+      beta: '1.25',
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.investing_cf).toBe(-50000);
       expect(result.data.shares_outstanding).toBe(1000000);
+      expect(result.data.cash_and_equivalents).toBe(700000);
+      expect(result.data.shareholders_equity).toBe(1900000);
+      expect(result.data.beta).toBe(1.25);
     }
   });
 
@@ -146,9 +156,7 @@ describe('createFinancialDataSchema', () => {
       const revenueError = result.error.issues.find(
         (i) => i.path[0] === 'revenue'
       );
-      expect(revenueError?.message).toBe(
-        '売上高は0以上の値を入力してください'
-      );
+      expect(revenueError?.message).toBe('売上高は0以上の値を入力してください');
     }
   });
 

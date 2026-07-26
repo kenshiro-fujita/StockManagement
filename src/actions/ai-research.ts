@@ -9,10 +9,15 @@
  */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import {
+  getAuthenticatedContext,
+  type ServerSupabaseClient,
+} from '@/lib/supabase/auth';
 import { revalidateStockPaths } from '@/lib/revalidate';
 import { getAIProvider, type AIResearchResponse } from '@/lib/ai';
 import { AIProviderError } from '@/lib/ai/errors';
+import { stockIdSchema } from '@/lib/schemas/common';
+import type { ActionResult } from '@/lib/types/action';
 
 /**
  * 金額（円）を「N百万円」形式に整形する。
@@ -26,55 +31,71 @@ function formatMillionYen(value: number | null): string {
 
 /** AI に渡す財務サマリーを組み立てる（直近3期分） */
 async function buildFinancialSummary(
-  stockId: string,
+  supabase: ServerSupabaseClient,
+  userId: string,
+  stockId: string
 ): Promise<string | null> {
-  const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('financial_data')
     .select('fiscal_year, revenue, operating_income, net_income, total_assets')
     .eq('stock_id', stockId)
+    .eq('user_id', userId)
     .order('fiscal_year', { ascending: false })
     .limit(3);
 
+  if (error) {
+    // AI 調査自体は財務サマリーなしでも実行できるため、補助データの障害はログに留めます。
+    console.error('financial summary fetch failed:', error);
+    return null;
+  }
   if (!data || data.length === 0) return null;
 
   return data
     .map(
-      (fd: { fiscal_year: number; revenue: number | null; operating_income: number | null; net_income: number | null; total_assets: number | null }) =>
+      (fd) =>
         `${fd.fiscal_year}年: 売上${formatMillionYen(fd.revenue)}, ` +
         `営業利益${formatMillionYen(fd.operating_income)}, ` +
         `純利益${formatMillionYen(fd.net_income)}, ` +
-        `総資産${formatMillionYen(fd.total_assets)}`,
+        `総資産${formatMillionYen(fd.total_assets)}`
     )
     .join('\n');
 }
 
 /** 銘柄の定性調査を AI で実行し、結果を DB に保存する */
 export async function runAIResearch(
-  stockId: string,
-): Promise<{ success: boolean; error?: string; data?: AIResearchResponse }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: '認証が必要です' };
+  stockId: string
+): Promise<ActionResult<AIResearchResponse, AIResearchResponse>> {
+  if (!stockIdSchema.safeParse(stockId).success) {
+    return { success: false, error: '無効な銘柄IDです' };
   }
 
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
   // 銘柄情報を取得
-  const { data: stock } = await supabase
+  const { data: stock, error: stockError } = await supabase
     .from('stocks')
     .select('stock_code, company_name, sector, business_segment')
     .eq('id', stockId)
-    .single();
+    .eq('user_id', user.id)
+    .maybeSingle();
 
+  if (stockError) {
+    return { success: false, error: '銘柄情報の取得に失敗しました' };
+  }
   if (!stock) {
     return { success: false, error: '銘柄が見つかりません' };
   }
 
   try {
-    const financialSummary = await buildFinancialSummary(stockId);
+    const financialSummary = await buildFinancialSummary(
+      supabase,
+      user.id,
+      stockId
+    );
     const provider = await getAIProvider();
 
     const result = await provider.research({
@@ -103,7 +124,8 @@ export async function runAIResearch(
       console.error('ai_research insert failed:', insertError);
       return {
         success: false,
-        error: '調査は完了しましたが結果の保存に失敗しました。再度お試しください。',
+        error:
+          '調査は完了しましたが結果の保存に失敗しました。再度お試しください。',
         data: result,
       };
     }
@@ -113,7 +135,8 @@ export async function runAIResearch(
     const { error: descError } = await supabase
       .from('stocks')
       .update({ business_description: result.businessOverview })
-      .eq('id', stockId);
+      .eq('id', stockId)
+      .eq('user_id', user.id);
     if (descError) {
       console.error('business_description update failed:', descError);
     }
@@ -126,37 +149,68 @@ export async function runAIResearch(
     if (error instanceof AIProviderError) {
       switch (error.kind) {
         case 'insufficient_credit':
-          return { success: false, error: 'AI APIのクレジット残高が不足しています。プロバイダの管理画面からクレジットを購入してください。' };
+          return {
+            success: false,
+            error:
+              'AI APIのクレジット残高が不足しています。プロバイダの管理画面からクレジットを購入してください。',
+          };
         case 'auth':
-          return { success: false, error: 'AI APIキーが無効です。ユーザー設定画面で正しいキーを登録してください。' };
+          return {
+            success: false,
+            error:
+              'AI APIキーが無効です。ユーザー設定画面で正しいキーを登録してください。',
+          };
         case 'rate_limit':
-          return { success: false, error: 'AI APIのレート制限に達しました。しばらくしてから再度お試しください。' };
+          return {
+            success: false,
+            error:
+              'AI APIのレート制限に達しました。しばらくしてから再度お試しください。',
+          };
       }
     }
 
     // 詳細はサーバーログのみに残し、ユーザーには汎用メッセージを返す（内部情報の露出防止）
     console.error('runAIResearch failed:', error);
-    return { success: false, error: 'AI調査に失敗しました。しばらくしてから再度お試しください。' };
+    return {
+      success: false,
+      error: 'AI調査に失敗しました。しばらくしてから再度お試しください。',
+    };
   }
 }
 
 /** 銘柄の最新の調査結果を取得する */
 export async function getLatestResearch(
-  stockId: string,
-): Promise<{ data: AIResearchResponse | null }> {
-  const supabase = await createClient();
+  stockId: string
+): Promise<ActionResult<AIResearchResponse | null>> {
+  if (!stockIdSchema.safeParse(stockId).success) {
+    return { success: false, error: '無効な銘柄IDです' };
+  }
 
-  const { data } = await supabase
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
+  const { data, error } = await supabase
     .from('ai_research')
-    .select('business_overview, competitive_position, strengths_and_risks, recent_news, model, researched_at')
+    .select(
+      'business_overview, competitive_position, strengths_and_risks, recent_news, model, researched_at'
+    )
     .eq('stock_id', stockId)
+    .eq('user_id', user.id)
     .order('researched_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (!data) return { data: null };
+  if (error) {
+    console.error('getLatestResearch failed:', error);
+    return { success: false, error: 'AI調査結果の取得に失敗しました' };
+  }
+  if (!data) return { success: true, data: null };
 
   return {
+    success: true,
     data: {
       businessOverview: data.business_overview,
       competitivePosition: data.competitive_position,

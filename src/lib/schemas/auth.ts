@@ -7,7 +7,10 @@ export const PASSWORD_MIN_LENGTH = 8;
 export const passwordSchema = z
   .string()
   .min(1, 'パスワードを入力してください')
-  .min(PASSWORD_MIN_LENGTH, `パスワードは${PASSWORD_MIN_LENGTH}文字以上で入力してください`);
+  .min(
+    PASSWORD_MIN_LENGTH,
+    `パスワードは${PASSWORD_MIN_LENGTH}文字以上で入力してください`
+  );
 
 /**
  * メールアドレス単体のスキーマ。

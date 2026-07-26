@@ -10,7 +10,11 @@
  * - 有価証券報告書のフィルタリング
  * - 証券コードによる有報検索（日付範囲イテレーション）
  */
-import type { EdinetDocListResponse, EdinetDocument, AnnualReport } from './types';
+import type {
+  EdinetDocListResponse,
+  EdinetDocument,
+  AnnualReport,
+} from './types';
 import { validateDateRange } from './date-range';
 
 /** EDINET API v2 のベース URL */
@@ -27,6 +31,34 @@ const RETRY_BASE_DELAY_MS = 3_000;
 // 呼び出し側（Server Actions）が lib/edinet/api-key.ts の resolveEdinetApiKey() で
 // リクエストごとに解決し、各関数へ引数として渡す。
 
+/** レート制限と一時的なサーバー障害だけを再試行する。 */
+function isRetryableStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+/**
+ * 1回の HTTP リクエストへタイムアウトを付与する。
+ *
+ * 成功・失敗のどちらでもタイマーを破棄し、ウォームインスタンスに不要な
+ * タイマーと AbortController を残さない。
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * タイムアウト付き fetch + 指数バックオフリトライ
  * - 401（認証エラー）はリトライしない
@@ -35,18 +67,11 @@ const RETRY_BASE_DELAY_MS = 3_000;
 async function fetchWithRetry(
   url: string,
   options: RequestInit = {},
-  retries = MAX_RETRIES,
+  retries = MAX_RETRIES
 ): Promise<Response> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-      const res = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      const res = await fetchWithTimeout(url, options);
 
       if (res.ok) return res;
 
@@ -56,7 +81,7 @@ async function fetchWithRetry(
       }
 
       // 429（レート制限）と 500系はリトライ対象（時間を置けば回復しうる）
-      if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+      if (isRetryableStatus(res.status) && attempt < retries) {
         await sleep(RETRY_BASE_DELAY_MS * (attempt + 1));
         continue;
       }
@@ -86,7 +111,7 @@ function sleep(ms: number): Promise<void> {
  */
 export async function fetchDocumentList(
   date: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<EdinetDocListResponse> {
   const url = new URL(`${EDINET_BASE_URL}/documents.json`);
   url.searchParams.set('date', date);
@@ -104,7 +129,7 @@ export async function fetchDocumentList(
 export async function fetchDocumentData(
   docID: string,
   type: 1 | 5,
-  apiKey: string,
+  apiKey: string
 ): Promise<ArrayBuffer> {
   const url = new URL(`${EDINET_BASE_URL}/documents/${docID}`);
   url.searchParams.set('type', String(type));
@@ -121,6 +146,38 @@ export async function fetchDocumentData(
   return res.arrayBuffer();
 }
 
+/** AnnualReport へ変換するために必要な条件を満たした書類へ型を絞る。 */
+type AnnualReportDocument = EdinetDocument & { secCode: string };
+
+function isAnnualReportDocument(
+  document: EdinetDocument
+): document is AnnualReportDocument {
+  return (
+    document.docTypeCode === '120' &&
+    document.secCode != null &&
+    document.secCode !== '' &&
+    (document.xbrlFlag === '1' || document.csvFlag === '1') &&
+    document.withdrawalStatus === '0' &&
+    document.disclosureStatus === '0'
+  );
+}
+
+/** API の書類情報を、アプリが検索結果として公開する最小形へ変換する。 */
+function toAnnualReport(document: AnnualReportDocument): AnnualReport {
+  return {
+    docID: document.docID,
+    secCode: document.secCode,
+    edinetCode: document.edinetCode,
+    filerName: document.filerName ?? '不明',
+    periodStart: document.periodStart,
+    periodEnd: document.periodEnd,
+    submitDateTime: document.submitDateTime,
+    docDescription: document.docDescription,
+    xbrlFlag: document.xbrlFlag === '1',
+    csvFlag: document.csvFlag === '1',
+  };
+}
+
 /**
  * 書類一覧から有価証券報告書のみを抽出する
  *
@@ -130,29 +187,10 @@ export async function fetchDocumentData(
  * - XBRL または CSV データが利用可能
  * - 取下・不開示でない通常の書類
  */
-export function filterAnnualReports(documents: EdinetDocument[]): AnnualReport[] {
-  return documents
-    .filter(
-      (doc) =>
-        doc.docTypeCode === '120' &&
-        doc.secCode != null &&
-        doc.secCode !== '' &&
-        (doc.xbrlFlag === '1' || doc.csvFlag === '1') &&
-        doc.withdrawalStatus === '0' &&
-        doc.disclosureStatus === '0',
-    )
-    .map((doc) => ({
-      docID: doc.docID,
-      secCode: doc.secCode!,
-      edinetCode: doc.edinetCode,
-      filerName: doc.filerName ?? '不明',
-      periodStart: doc.periodStart,
-      periodEnd: doc.periodEnd,
-      submitDateTime: doc.submitDateTime,
-      docDescription: doc.docDescription,
-      xbrlFlag: doc.xbrlFlag === '1',
-      csvFlag: doc.csvFlag === '1',
-    }));
+export function filterAnnualReports(
+  documents: readonly EdinetDocument[]
+): AnnualReport[] {
+  return documents.filter(isAnnualReportDocument).map(toAnnualReport);
 }
 
 /**
@@ -169,7 +207,7 @@ export async function searchAnnualReports(
   stockCode: string,
   startDate: string,
   endDate: string,
-  apiKey: string,
+  apiKey: string
 ): Promise<AnnualReport[]> {
   // 範囲はリソース枯渇を防ぐため必ず検証する（呼び出し側でも検証するが多層防御）
   const validation = validateDateRange(startDate, endDate);
@@ -191,7 +229,7 @@ export async function searchAnnualReports(
       const reports = filterAnnualReports(response.results);
       // secCode の先頭4桁と証券コード（4桁）を照合
       const matched = reports.filter(
-        (r) => r.secCode.slice(0, 4) === stockCode,
+        (r) => r.secCode.slice(0, 4) === stockCode
       );
       results.push(...matched);
     } catch {

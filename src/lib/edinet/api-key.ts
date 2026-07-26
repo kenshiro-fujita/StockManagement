@@ -17,5 +17,7 @@ export async function resolveEdinetApiKey(): Promise<string> {
   const envKey = process.env.EDINET_API_KEY;
   if (envKey) return envKey;
 
-  throw new Error('EDINET APIキーが設定されていません。ユーザー設定画面から登録してください。');
+  throw new Error(
+    'EDINET APIキーが設定されていません。ユーザー設定画面から登録してください。'
+  );
 }

@@ -19,7 +19,12 @@ describe('calcYoYGrowthRate', () => {
 
   it('前期が赤字の場合も絶対値で計算する', () => {
     // (-500,000 - (-1,000,000)) ÷ |-1,000,000| × 100 = 50%
-    const result = calcYoYGrowthRate(-500_000, -1_000_000, '純利益', 'net_income');
+    const result = calcYoYGrowthRate(
+      -500_000,
+      -1_000_000,
+      '純利益',
+      'net_income'
+    );
     expect(result.value).toBe(50);
   });
 

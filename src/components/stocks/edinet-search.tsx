@@ -22,7 +22,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { searchMasterByStockCode, importMasterToFinancialData } from '@/actions/edinet-master';
+import {
+  searchMasterByStockCode,
+  importMasterToFinancialData,
+} from '@/actions/edinet-master';
 import { NULL_DISPLAY } from '@/lib/format';
 
 type MasterRow = {
@@ -59,37 +62,95 @@ export function EdinetSearch({
   const router = useRouter();
   const [masterData, setMasterData] = useState<MasterRow[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [importingDocId, setImportingDocId] = useState<string | null>(null);
   const [importedDocIds, setImportedDocIds] = useState<Set<string>>(new Set());
 
-  // ページ表示時にマスタから即座に検索
+  // 正常な0件と検索失敗を混同せず、失敗時は利用者が再試行できるようにします。
   useEffect(() => {
-    (async () => {
-      const result = await searchMasterByStockCode(stockCode);
-      setMasterData(result.data ?? []);
-      setIsLoading(false);
-    })();
-  }, [stockCode]);
+    let cancelled = false;
+
+    void searchMasterByStockCode(stockCode)
+      .then((result) => {
+        if (cancelled) return;
+
+        if (result.success) {
+          setMasterData(result.data);
+          setLoadError(null);
+        } else {
+          setLoadError(result.error);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError('EDINETマスタの検索に失敗しました');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAttempt, stockCode]);
+
+  const handleRetryLoad = () => {
+    setIsLoading(true);
+    setLoadError(null);
+    setLoadAttempt((attempt) => attempt + 1);
+  };
 
   const handleImport = async (docId: string, fiscalYear: number) => {
     setImportingDocId(docId);
-    const result = await importMasterToFinancialData(stockId, docId);
-    setImportingDocId(null);
 
-    if (result.success) {
-      setImportedDocIds((prev) => new Set([...prev, docId]));
-      toast.success(`${fiscalYear}年度の財務データを取り込みました`);
-      router.refresh();
-    } else {
-      toast.error(result.error ?? '取り込みに失敗しました');
+    try {
+      const result = await importMasterToFinancialData(stockId, docId);
+      if (result.success) {
+        setImportedDocIds((prev) => new Set([...prev, docId]));
+        toast.success(`${fiscalYear}年度の財務データを取り込みました`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? '取り込みに失敗しました');
+      }
+    } catch {
+      toast.error('財務データの取り込み中にエラーが発生しました');
+    } finally {
+      setImportingDocId(null);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        <span className="ml-2 text-muted-foreground">マスタデータを検索中...</span>
+      <div className="flex items-center justify-center py-12" role="status">
+        <Loader2
+          className="h-6 w-6 animate-spin text-muted-foreground"
+          aria-hidden="true"
+        />
+        <span className="ml-2 text-muted-foreground">
+          マスタデータを検索中...
+        </span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3 rounded-lg border border-destructive/40 p-4">
+        <p className="text-sm text-destructive" role="alert">
+          {loadError}
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleRetryLoad}
+        >
+          再試行
+        </Button>
       </div>
     );
   }
@@ -98,14 +159,20 @@ export function EdinetSearch({
     return (
       <div className="space-y-4">
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Database className="text-muted-foreground mb-4 h-12 w-12" />
-          <h3 className="mb-2 text-lg font-semibold">マスタデータがありません</h3>
-          <p className="text-muted-foreground mb-2">
-            証券コード {stockCode} の有価証券報告書がマスタに登録されていません。
+          <Database className="mb-4 h-12 w-12 text-muted-foreground" />
+          <h3 className="mb-2 text-lg font-semibold">
+            マスタデータがありません
+          </h3>
+          <p className="mb-2 text-muted-foreground">
+            証券コード {stockCode}{' '}
+            の有価証券報告書がマスタに登録されていません。
           </p>
-          <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800 space-y-1 max-w-md">
+          <div className="max-w-md space-y-1 rounded-lg border border-blue-100 bg-blue-50/50 p-3 text-xs text-blue-800">
             <p className="font-medium">マスタデータの取得方法</p>
-            <p>ユーザー設定画面で EDINET API キーを登録した上で、管理画面からバッチ取得を実行してください。</p>
+            <p>
+              ユーザー設定画面で EDINET API
+              キーを登録した上で、管理画面からバッチ取得を実行してください。
+            </p>
             <p>将来的には Cron で自動取得されるようになります。</p>
           </div>
         </div>
@@ -124,7 +191,8 @@ export function EdinetSearch({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        EDINET から事前取得済みの財務データです。「取り込む」を押すとこの銘柄の財務データに反映されます。
+        EDINET
+        から事前取得済みの財務データです。「取り込む」を押すとこの銘柄の財務データに反映されます。
       </p>
 
       <Table>
@@ -136,7 +204,9 @@ export function EdinetSearch({
             <TableHead className="text-right">営業利益</TableHead>
             <TableHead className="text-right">純利益</TableHead>
             <TableHead className="text-right">総資産</TableHead>
-            <TableHead className="w-24"></TableHead>
+            <TableHead className="w-24">
+              <span className="sr-only">操作</span>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -145,7 +215,9 @@ export function EdinetSearch({
               <TableCell className="font-medium">
                 <div>
                   {row.fiscal_year}
-                  <span className="text-xs text-muted-foreground ml-1">通期</span>
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    通期
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {row.period_start} 〜 {row.period_end}
@@ -156,16 +228,16 @@ export function EdinetSearch({
                   {row.accounting_standard ?? '不明'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-right tabular-nums text-sm">
+              <TableCell className="text-right text-sm tabular-nums">
                 {formatMillion(row.revenue)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-sm">
+              <TableCell className="text-right text-sm tabular-nums">
                 {formatMillion(row.operating_income)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-sm">
+              <TableCell className="text-right text-sm tabular-nums">
                 {formatMillion(row.net_income)}
               </TableCell>
-              <TableCell className="text-right tabular-nums text-sm">
+              <TableCell className="text-right text-sm tabular-nums">
                 {formatMillion(row.total_assets)}
               </TableCell>
               <TableCell>

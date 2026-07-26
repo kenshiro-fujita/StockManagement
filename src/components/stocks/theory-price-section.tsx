@@ -1,8 +1,26 @@
+/**
+ * 理論株価と派生指標を、計算根拠まで追跡できる形で表示します。
+ *
+ * 結果表示・差分強調・計算トレースの開閉だけを担い、計算そのものは
+ * lib の純粋関数と型に委譲して透明性を保ちます。
+ */
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp } from 'lucide-react';
-import type { IndicatorResults, CalcResult, CalcMetadata, CalcInput } from '@/lib/types/calc';
+import {
+  Calculator,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
+import type {
+  IndicatorResults,
+  CalcResult,
+  CalcMetadata,
+  CalcInput,
+} from '@/lib/types/calc';
 import {
   formatCurrency,
   formatStockPrice,
@@ -18,16 +36,16 @@ import {
 function TheoryPriceEmpty() {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Calculator className="text-muted-foreground mb-4 h-12 w-12" />
-      <h3 className="mb-2 text-lg font-semibold">
-        理論株価を算出できません
-      </h3>
-      <p className="text-muted-foreground mb-2">
+      <Calculator className="mb-4 h-12 w-12 text-muted-foreground" />
+      <h3 className="mb-2 text-lg font-semibold">理論株価を算出できません</h3>
+      <p className="mb-2 text-muted-foreground">
         以下の条件を満たすと理論株価が自動算出されます:
       </p>
-      <ul className="text-sm text-muted-foreground text-left space-y-1 mb-4">
+      <ul className="mb-4 space-y-1 text-left text-sm text-muted-foreground">
         <li>1. 「財務データ」タブで1期以上の財務データを登録する</li>
-        <li className="ml-4 text-xs">（必須: 売上高、営業利益、純利益、総資産、自己資本、発行済株式数）</li>
+        <li className="ml-4 text-xs">
+          （必須: 売上高、営業利益、純利益、総資産、自己資本、発行済株式数）
+        </li>
         <li>2. 「パラメータ」タブで割引率・成長率・実効税率を設定する</li>
         <li className="ml-4 text-xs">（EDINETタブから自動取得も可能です）</li>
       </ul>
@@ -39,7 +57,7 @@ function TheoryPriceEmpty() {
 
 function getIndicatorValue(
   results: IndicatorResults,
-  field: string,
+  field: string
 ): CalcResult<number> | undefined {
   if (field === 'movingAverageROIC') return results.movingAverageROIC;
   return (results.period as Record<string, CalcResult<number>>)[field];
@@ -48,7 +66,7 @@ function getIndicatorValue(
 /** Detect which indicator fields changed between previous and current results */
 export function detectChangedFields(
   prev: IndicatorResults | null,
-  current: IndicatorResults | null,
+  current: IndicatorResults | null
 ): Set<string> {
   if (!prev || !current) return new Set();
   const changed = new Set<string>();
@@ -56,7 +74,9 @@ export function detectChangedFields(
   // Check all period indicators
   for (const key of Object.keys(current.period)) {
     const prevCalc = (prev.period as Record<string, CalcResult<number>>)[key];
-    const currCalc = (current.period as Record<string, CalcResult<number>>)[key];
+    const currCalc = (current.period as Record<string, CalcResult<number>>)[
+      key
+    ];
     if (prevCalc && currCalc && prevCalc.value !== currCalc.value) {
       changed.add(key);
     }
@@ -74,7 +94,10 @@ export function detectChangedFields(
 
 import { getValuationLevel, type ValuationLevel } from '@/lib/calc/safety';
 
-const BADGE_CONFIG: Record<ValuationLevel, { label: string; className: string; Icon: typeof TrendingUp }> = {
+const BADGE_CONFIG: Record<
+  ValuationLevel,
+  { label: string; className: string; Icon: typeof TrendingUp }
+> = {
   cheap: {
     label: '割安',
     className: 'bg-green-100 text-green-800 border-green-300',
@@ -104,38 +127,6 @@ function ValuationBadge({ level }: { level: ValuationLevel }) {
       {label}
     </span>
   );
-}
-
-// ---------- Highlight Hook ----------
-
-/**
- * Manages highlight animation state with proper cleanup for CSS animation replay.
- *
- * Returns a Set of fields currently highlighted.
- * Uses useState so that clearing the set triggers a re-render,
- * which removes the animate-highlight class and allows it to replay on next change.
- */
-function useHighlight(changedFields: Set<string>, durationMs = 300): Set<string> {
-  const [highlighted, setHighlighted] = useState<Set<string>>(new Set());
-  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-
-  useEffect(() => {
-    if (changedFields.size === 0) return;
-
-    setHighlighted(new Set(changedFields));
-
-    if (timerRef.current) clearTimeout(timerRef.current);
-
-    timerRef.current = setTimeout(() => {
-      setHighlighted(new Set());
-    }, durationMs);
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [changedFields, durationMs]);
-
-  return highlighted;
 }
 
 // ---------- Comparison Summary ----------
@@ -170,6 +161,8 @@ function ComparisonSummary({
       {/* メインの理論株価を大きく表示 */}
       <div className="grid gap-4 sm:grid-cols-2">
         <SummaryCard
+          // React の再調停キーを呼び出し元に置き、値の変更時にハイライトを再生します。
+          key={`theoryPrice-${theoryPrice.value}`}
           label="現状理論株価"
           value={formatStockPrice(theoryPrice.value)}
           field="theoryPrice"
@@ -180,6 +173,7 @@ function ComparisonSummary({
           large
         />
         <SummaryCard
+          key={`safetyRateCurrent-${safetyRateCurrent.value}`}
           label="安全率（現状）"
           value={formatPercent(safetyRateCurrent.value)}
           field="safetyRateCurrent"
@@ -193,13 +187,15 @@ function ComparisonSummary({
       </div>
 
       {/* サブ指標 */}
-      <div className="grid gap-3 sm:grid-cols-3 mt-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <SummaryCard
+          key={`currentStockPrice-${currentStockPrice ?? 'none'}`}
           label="現在株価"
           value={hasPrice ? formatStockPrice(currentStockPrice) : NULL_DISPLAY}
           muted={!hasPrice}
         />
         <SummaryCard
+          key={`growthTheoryPrice-${growthTheoryPrice.value}`}
           label="成長込理論株価"
           value={formatStockPrice(growthTheoryPrice.value)}
           field="growthTheoryPrice"
@@ -209,6 +205,7 @@ function ComparisonSummary({
           onToggle={onToggle}
         />
         <SummaryCard
+          key={`safetyRateGrowth-${safetyRateGrowth.value}`}
           label="安全率（成長込）"
           value={formatPercent(safetyRateGrowth.value)}
           field="safetyRateGrowth"
@@ -219,7 +216,7 @@ function ComparisonSummary({
         />
       </div>
       {!hasPrice && (
-        <p className="text-muted-foreground mt-3 text-sm">
+        <p className="mt-3 text-sm text-muted-foreground">
           現在の株価が未入力のため、比較・安全率は参考値です
         </p>
       )}
@@ -251,8 +248,15 @@ function SummaryCard({
   onToggle?: (field: string) => void;
   large?: boolean;
 }) {
-  const isExpanded = field != null && expandedField === field;
+  const toggleKey = field ? `summary:${field}` : undefined;
+  const isExpanded = toggleKey != null && expandedField === toggleKey;
   const isClickable = field != null && metadata != null && onToggle != null;
+  const panelId = field ? `summary-${field}-logic` : undefined;
+  const handleToggle = () => {
+    if (toggleKey && onToggle) {
+      onToggle(toggleKey);
+    }
+  };
 
   /** large: メイン指標を大きく目立たせる */
   const valueSize = large ? 'text-3xl' : 'text-xl';
@@ -263,28 +267,39 @@ function SummaryCard({
       className={`rounded-lg border ${padding} transition-colors ${muted ? 'opacity-60' : ''} ${highlighted ? 'animate-highlight' : ''}`}
       {...(field ? { 'data-indicator': field } : {})}
     >
-      <p className={`text-muted-foreground ${large ? 'text-base font-medium' : 'text-sm'}`}>{label}</p>
+      <p
+        className={`text-muted-foreground ${large ? 'text-base font-medium' : 'text-sm'}`}
+      >
+        {label}
+      </p>
       {isClickable ? (
         <button
           type="button"
-          className={`mt-1 ${valueSize} font-bold tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 inline-flex items-center gap-1`}
-          onClick={() => onToggle(field)}
+          className={`mt-1 ${valueSize} inline-flex cursor-pointer items-center gap-1 font-bold tabular-nums text-teal-700 underline decoration-teal-400 decoration-dotted underline-offset-4 hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500`}
+          onClick={handleToggle}
           aria-expanded={isExpanded}
+          aria-controls={panelId}
           aria-label={`${label} ${value} — クリックして計算ロジックを${isExpanded ? '閉じる' : '開く'}`}
         >
           {value}
-          {isExpanded
-            ? <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            : <ChevronDown className="h-4 w-4" aria-hidden="true" />
-          }
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          )}
         </button>
       ) : (
-        <p className={`mt-1 ${valueSize} font-bold tabular-nums`} aria-label={`${label} ${value}`}>
+        <p
+          className={`mt-1 ${valueSize} font-bold tabular-nums`}
+          aria-label={`${label} ${value}`}
+        >
           {value}
         </p>
       )}
       {badge && <div className="mt-2">{badge}</div>}
-      {isExpanded && metadata && <CalcLogicPanel metadata={metadata} />}
+      {isExpanded && metadata && (
+        <CalcLogicPanel id={panelId} label={label} metadata={metadata} />
+      )}
     </div>
   );
 }
@@ -297,31 +312,46 @@ function InputRefItem({ input }: { input: CalcInput }) {
   return (
     <li className="flex justify-between gap-2 text-sm">
       <span className="text-muted-foreground">
-        {input.label}{periodLabel}{sourceLabel}
+        {input.label}
+        {periodLabel}
+        {sourceLabel}
       </span>
-      <span className="font-medium tabular-nums whitespace-nowrap">
+      <span className="whitespace-nowrap font-medium tabular-nums">
         {input.value.toLocaleString()}
       </span>
     </li>
   );
 }
 
-function CalcLogicPanel({ metadata }: { metadata: CalcMetadata }) {
+function CalcLogicPanel({
+  id,
+  label,
+  metadata,
+}: {
+  id?: string;
+  label: string;
+  metadata: CalcMetadata;
+}) {
   return (
     <div
+      id={id}
       className="mt-2 rounded-md border border-teal-200 bg-teal-50/50 p-4 text-sm"
       role="region"
-      aria-label="計算ロジック詳細"
+      aria-label={`${label}の計算ロジック詳細`}
     >
       <dl className="space-y-3">
         <div>
-          <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">数式</dt>
+          <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            数式
+          </dt>
           <dd className="mt-0.5 font-mono text-sm">{metadata.formula}</dd>
         </div>
 
         {metadata.inputs.length > 0 && (
           <div>
-            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">入力値</dt>
+            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              入力値
+            </dt>
             <dd className="mt-1">
               <ul className="space-y-1">
                 {metadata.inputs.map((input, i) => (
@@ -334,11 +364,15 @@ function CalcLogicPanel({ metadata }: { metadata: CalcMetadata }) {
 
         <div className="flex gap-6">
           <div>
-            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">端数処理</dt>
+            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              端数処理
+            </dt>
             <dd className="mt-0.5">{metadata.rounding}</dd>
           </div>
           <div>
-            <dt className="text-muted-foreground text-xs font-medium uppercase tracking-wider">calc_version</dt>
+            <dt className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              calc_version
+            </dt>
             <dd className="mt-0.5 font-mono">{metadata.calcVersion}</dd>
           </div>
         </div>
@@ -353,40 +387,47 @@ function ClickableValue({
   label,
   metadata,
   expandedField,
-  field,
+  toggleKey,
+  panelId,
   onToggle,
 }: {
   formatted: string;
   label: string;
   metadata: CalcMetadata | undefined;
   expandedField: string | null;
-  field: string;
+  toggleKey: string;
+  panelId: string;
   onToggle: (field: string) => void;
 }) {
   if (!metadata) {
     return (
-      <span className="font-medium tabular-nums" aria-label={`${label} ${formatted}`}>
+      <span
+        className="font-medium tabular-nums"
+        aria-label={`${label} ${formatted}`}
+      >
         {formatted}
       </span>
     );
   }
 
-  const isExpanded = expandedField === field;
+  const isExpanded = expandedField === toggleKey;
 
   return (
     <span>
       <button
         type="button"
-        className="inline-flex items-center gap-1 font-medium tabular-nums text-teal-700 decoration-teal-400 decoration-dotted underline-offset-4 underline cursor-pointer hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500"
-        onClick={() => onToggle(field)}
+        className="inline-flex cursor-pointer items-center gap-1 font-medium tabular-nums text-teal-700 underline decoration-teal-400 decoration-dotted underline-offset-4 hover:text-teal-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500"
+        onClick={() => onToggle(toggleKey)}
         aria-expanded={isExpanded}
+        aria-controls={panelId}
         aria-label={`${label} ${formatted} — クリックして計算ロジックを${isExpanded ? '閉じる' : '開く'}`}
       >
         {formatted}
-        {isExpanded
-          ? <ChevronUp className="h-3 w-3" aria-hidden="true" />
-          : <ChevronDown className="h-3 w-3" aria-hidden="true" />
-        }
+        {isExpanded ? (
+          <ChevronUp className="h-3 w-3" aria-hidden="true" />
+        ) : (
+          <ChevronDown className="h-3 w-3" aria-hidden="true" />
+        )}
       </button>
     </span>
   );
@@ -416,9 +457,21 @@ const CATEGORIES: CategoryDef[] = [
     id: 'profitability',
     color: 'border-l-teal-500',
     indicators: [
-      { field: 'equityRatio', label: '自己資本比率', format: formatPercentUnsigned },
-      { field: 'netProfitMargin', label: '純利益率', format: formatPercentUnsigned },
-      { field: 'operatingMargin', label: '売上営業利益率', format: formatPercentUnsigned },
+      {
+        field: 'equityRatio',
+        label: '自己資本比率',
+        format: formatPercentUnsigned,
+      },
+      {
+        field: 'netProfitMargin',
+        label: '純利益率',
+        format: formatPercentUnsigned,
+      },
+      {
+        field: 'operatingMargin',
+        label: '売上営業利益率',
+        format: formatPercentUnsigned,
+      },
     ],
   },
   {
@@ -426,8 +479,16 @@ const CATEGORIES: CategoryDef[] = [
     id: 'growth',
     color: 'border-l-green-500',
     indicators: [
-      { field: 'revenueGrowthRate', label: '売上高前年比成長率', format: formatPercent },
-      { field: 'netIncomeGrowthRate', label: '純利益前年比成長率', format: formatPercent },
+      {
+        field: 'revenueGrowthRate',
+        label: '売上高前年比成長率',
+        format: formatPercent,
+      },
+      {
+        field: 'netIncomeGrowthRate',
+        label: '純利益前年比成長率',
+        format: formatPercent,
+      },
     ],
   },
   {
@@ -448,7 +509,11 @@ const CATEGORIES: CategoryDef[] = [
       { field: 'roe', label: 'ROE', format: formatPercentUnsigned },
       { field: 'roa', label: 'ROA', format: formatPercentUnsigned },
       { field: 'roic', label: 'ROIC', format: formatPercentUnsigned },
-      { field: 'movingAverageROIC', label: '移動平均ROIC', format: formatPercentUnsigned },
+      {
+        field: 'movingAverageROIC',
+        label: '移動平均ROIC',
+        format: formatPercentUnsigned,
+      },
     ],
   },
   {
@@ -469,7 +534,11 @@ const CATEGORIES: CategoryDef[] = [
       { field: 'businessValue', label: '事業価値', format: formatCurrency },
       { field: 'assetValue', label: '資産価値', format: formatCurrency },
       { field: 'theoryPrice', label: '現状理論株価', format: formatStockPrice },
-      { field: 'growthTheoryPrice', label: '成長込理論株価', format: formatStockPrice },
+      {
+        field: 'growthTheoryPrice',
+        label: '成長込理論株価',
+        format: formatStockPrice,
+      },
     ],
   },
   {
@@ -477,10 +546,22 @@ const CATEGORIES: CategoryDef[] = [
     id: 'theory-per',
     color: 'border-l-orange-500',
     indicators: [
-      { field: 'theoryMarketCap', label: '理論時価総額', format: formatCurrency },
+      {
+        field: 'theoryMarketCap',
+        label: '理論時価総額',
+        format: formatCurrency,
+      },
       { field: 'theoryPER', label: '理論PER', format: formatMultiple },
-      { field: 'futureTheoryMarketCap', label: '5年後理論時価総額', format: formatCurrency },
-      { field: 'futureNetIncome', label: '6年目当期純利益', format: formatCurrency },
+      {
+        field: 'futureTheoryMarketCap',
+        label: '5年後理論時価総額',
+        format: formatCurrency,
+      },
+      {
+        field: 'futureNetIncome',
+        label: '6年目当期純利益',
+        format: formatCurrency,
+      },
     ],
   },
   {
@@ -488,12 +569,36 @@ const CATEGORIES: CategoryDef[] = [
     id: 'safety',
     color: 'border-l-emerald-500',
     indicators: [
-      { field: 'safetyMarginCurrent', label: '安全域（現状）', format: formatCurrency },
-      { field: 'safetyMarginGrowth', label: '安全域（成長込）', format: formatCurrency },
-      { field: 'safetyRateCurrent', label: '安全率（現状）', format: formatPercent },
-      { field: 'safetyRateGrowth', label: '安全率（成長込）', format: formatPercent },
-      { field: 'idealBuyPriceCurrent', label: '理想購入株価（対現状）', format: formatStockPrice },
-      { field: 'idealBuyPriceGrowth', label: '理想購入株価（対成長）', format: formatStockPrice },
+      {
+        field: 'safetyMarginCurrent',
+        label: '安全域（現状）',
+        format: formatCurrency,
+      },
+      {
+        field: 'safetyMarginGrowth',
+        label: '安全域（成長込）',
+        format: formatCurrency,
+      },
+      {
+        field: 'safetyRateCurrent',
+        label: '安全率（現状）',
+        format: formatPercent,
+      },
+      {
+        field: 'safetyRateGrowth',
+        label: '安全率（成長込）',
+        format: formatPercent,
+      },
+      {
+        field: 'idealBuyPriceCurrent',
+        label: '理想購入株価（対現状）',
+        format: formatStockPrice,
+      },
+      {
+        field: 'idealBuyPriceGrowth',
+        label: '理想購入株価（対成長）',
+        format: formatStockPrice,
+      },
     ],
   },
 ];
@@ -513,7 +618,10 @@ function IndicatorSection({
 }) {
   return (
     <section aria-labelledby={`${category.id}-heading`}>
-      <h3 id={`${category.id}-heading`} className={`mb-3 text-base font-semibold border-l-4 pl-3 ${category.color}`}>
+      <h3
+        id={`${category.id}-heading`}
+        className={`mb-3 border-l-4 pl-3 text-base font-semibold ${category.color}`}
+      >
         {category.title}
       </h3>
       <dl className="divide-y rounded-lg border">
@@ -522,29 +630,39 @@ function IndicatorSection({
           const value = calcResult?.value ?? null;
           const formatted = indicator.format(value);
           const isChanged = changedFields.has(indicator.field);
-          const isExpanded = expandedField === indicator.field;
+          const toggleKey = `${category.id}:${indicator.field}`;
+          const isExpanded = expandedField === toggleKey;
+          const panelId = `${category.id}-${indicator.field}-logic`;
 
           return (
             <div
-              key={indicator.field}
+              // 値をキーに含め、同じ指標が再変更された場合も強調を再生します。
+              key={`${indicator.field}-${String(value)}`}
               className={`px-4 py-3 transition-colors ${isChanged ? 'animate-highlight' : ''}`}
               data-indicator={indicator.field}
             >
               <div className="flex items-center justify-between">
-                <dt className="text-muted-foreground text-sm">{indicator.label}</dt>
+                <dt className="text-sm text-muted-foreground">
+                  {indicator.label}
+                </dt>
                 <dd>
                   <ClickableValue
                     formatted={formatted}
                     label={indicator.label}
                     metadata={calcResult?.metadata}
                     expandedField={expandedField}
-                    field={indicator.field}
+                    toggleKey={toggleKey}
+                    panelId={panelId}
                     onToggle={onToggle}
                   />
                 </dd>
               </div>
               {isExpanded && calcResult?.metadata && (
-                <CalcLogicPanel metadata={calcResult.metadata} />
+                <CalcLogicPanel
+                  id={panelId}
+                  label={indicator.label}
+                  metadata={calcResult.metadata}
+                />
               )}
             </div>
           );
@@ -567,11 +685,8 @@ export function TheoryPriceSection({
 }) {
   const changedFields = useMemo(
     () => detectChangedFields(previousResults ?? null, results),
-    [previousResults, results],
+    [previousResults, results]
   );
-
-  // useHighlight manages animation lifecycle: applies class → clears after duration → allows replay
-  const highlighted = useHighlight(changedFields);
 
   // CalcLogicPanel toggle state — only one panel open at a time
   const [expandedField, setExpandedField] = useState<string | null>(null);
@@ -581,15 +696,31 @@ export function TheoryPriceSection({
     setExpandedField((prev) => (prev === field ? null : field));
   }, []);
 
-  // Close panel when clicking outside
+  // 外側クリックと Escape の両方で閉じ、ポインター以外でも同じ操作を可能にします。
   useEffect(() => {
+    if (!expandedField) return;
+
     function handleClickOutside(e: MouseEvent) {
-      if (expandedField && containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setExpandedField(null);
       }
     }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setExpandedField(null);
+      }
+    }
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [expandedField]);
 
   if (!results) {
@@ -604,7 +735,7 @@ export function TheoryPriceSection({
         growthTheoryPrice={results.period.growthTheoryPrice}
         safetyRateCurrent={results.period.safetyRateCurrent}
         safetyRateGrowth={results.period.safetyRateGrowth}
-        changedFields={highlighted}
+        changedFields={changedFields}
         expandedField={expandedField}
         onToggle={handleToggle}
       />
@@ -615,7 +746,7 @@ export function TheoryPriceSection({
             key={category.id}
             category={category}
             results={results}
-            changedFields={highlighted}
+            changedFields={changedFields}
             expandedField={expandedField}
             onToggle={handleToggle}
           />

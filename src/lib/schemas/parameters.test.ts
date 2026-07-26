@@ -99,7 +99,9 @@ describe('updateParametersSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      const discountError = result.error.issues.find((i) => i.path.includes('discount_rate'));
+      const discountError = result.error.issues.find((i) =>
+        i.path.includes('discount_rate')
+      );
       expect(discountError?.message).toContain('割引率は成長率より大きい値');
     }
   });

@@ -30,23 +30,32 @@ export function BuyPriorityInput({
     }
 
     setIsPending(true);
-    const result = await updateBuyPriority({
-      stock_id: stockId,
-      buy_priority: numValue,
-    });
-    setIsPending(false);
+    try {
+      const result = await updateBuyPriority({
+        stock_id: stockId,
+        buy_priority: numValue,
+      });
+      if (result.success) {
+        setSavedPriority(numValue);
+        return;
+      }
 
-    if (result.success) {
-      setSavedPriority(numValue);
-    } else {
       toast.error(result.error ?? '優先順の更新に失敗しました');
       setValue(savedPriority?.toString() ?? '');
+    } catch {
+      toast.error('優先順の更新に失敗しました');
+      setValue(savedPriority?.toString() ?? '');
+    } finally {
+      setIsPending(false);
     }
   };
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor={`priority-${stockId}`} className="text-sm text-muted-foreground shrink-0">
+      <label
+        htmlFor={`priority-${stockId}`}
+        className="shrink-0 text-sm text-muted-foreground"
+      >
         購入優先順
       </label>
       <Input

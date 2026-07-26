@@ -16,7 +16,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({ ...validData, email: '' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         'メールアドレスを入力してください'
       );
     }
@@ -26,7 +26,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({ ...validData, email: 'invalid' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         '有効なメールアドレスを入力してください'
       );
     }
@@ -36,7 +36,7 @@ describe('loginSchema', () => {
     const result = loginSchema.safeParse({ ...validData, password: '' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         'パスワードを入力してください'
       );
     }
@@ -64,7 +64,7 @@ describe('signUpSchema', () => {
     const result = signUpSchema.safeParse({ ...validData, email: '' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         'メールアドレスを入力してください'
       );
     }
@@ -74,7 +74,7 @@ describe('signUpSchema', () => {
     const result = signUpSchema.safeParse({ ...validData, email: 'invalid' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         '有効なメールアドレスを入力してください'
       );
     }
@@ -88,7 +88,7 @@ describe('signUpSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         'パスワードは8文字以上で入力してください'
       );
     }
@@ -102,7 +102,7 @@ describe('signUpSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         'パスワードを入力してください'
       );
     }

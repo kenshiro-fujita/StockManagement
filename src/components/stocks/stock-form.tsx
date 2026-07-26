@@ -68,14 +68,20 @@ export function StockForm({ stock }: { stock?: StockData }) {
       return;
     }
     setIsLookingUp(true);
-    const result = await lookupStockByCode(code);
-    setIsLookingUp(false);
-
-    if (result.success && result.data) {
-      form.setValue('company_name', result.data.companyName, { shouldDirty: true });
-      toast.success(`${result.data.companyName} が見つかりました`);
-    } else {
-      toast.error(result.error ?? '企業情報の取得に失敗しました');
+    try {
+      const result = await lookupStockByCode(code);
+      if (result.success && result.data) {
+        form.setValue('company_name', result.data.companyName, {
+          shouldDirty: true,
+        });
+        toast.success(`${result.data.companyName} が見つかりました`);
+      } else {
+        toast.error(result.error ?? '企業情報の取得に失敗しました');
+      }
+    } catch {
+      toast.error('企業情報の取得に失敗しました');
+    } finally {
+      setIsLookingUp(false);
     }
   };
 

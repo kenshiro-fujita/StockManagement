@@ -1,4 +1,11 @@
+/**
+ * 財務データ入力の期間・金額・単位を検証し、保存前の数値へ変換します。
+ *
+ * Server Action とフォームが同じ制約を使うことで、クライアント表示とDB境界の
+ * バリデーションが別々に変化することを防ぎます。
+ */
 import { z } from 'zod';
+import { fiscalYearSchema, stockIdSchema } from '@/lib/schemas/common';
 
 export const FISCAL_QUARTER_OPTIONS = ['Q1', 'Q2', 'Q3', 'Q4', 'FY'] as const;
 
@@ -38,26 +45,34 @@ const requiredAmount = z
 const optionalAmount = z
   .string()
   .trim()
-  .transform((val) => (val === '' ? undefined : val))
-  .pipe(
-    z
-      .string()
-      .regex(/^-?[\d,]+\.?\d*$/, '有効な数値を入力してください')
-      .transform((val) => Number(val.replace(/,/g, '')))
-      .pipe(z.number().finite('有効な数値を入力してください'))
-      .optional()
-  );
+  .optional()
+  .transform((value, context) => {
+    if (value == null || value === '') return undefined;
+    if (!/^-?[\d,]+\.?\d*$/.test(value)) {
+      context.addIssue({
+        code: 'custom',
+        message: '有効な数値を入力してください',
+      });
+      return z.NEVER;
+    }
+
+    const parsed = Number(value.replace(/,/g, ''));
+    if (!Number.isFinite(parsed)) {
+      context.addIssue({
+        code: 'custom',
+        message: '有効な数値を入力してください',
+      });
+      return z.NEVER;
+    }
+    return parsed;
+  });
 
 export const createFinancialDataSchema = z
   .object({
-    stock_id: z.uuid({ error: '無効な銘柄IDです' }),
+    stock_id: stockIdSchema,
 
     // Period attributes
-    fiscal_year: z
-      .number()
-      .int('年度は整数で入力してください')
-      .min(1900, '1900年以降を指定してください')
-      .max(2100, '2100年以前を指定してください'),
+    fiscal_year: fiscalYearSchema,
     fiscal_quarter: z.enum(FISCAL_QUARTER_OPTIONS, {
       error: '有効な四半期を選択してください',
     }),
@@ -79,6 +94,13 @@ export const createFinancialDataSchema = z
     shares_outstanding: optionalAmount,
     interest_expense: optionalAmount,
     current_stock_price: optionalAmount,
+    cash_and_equivalents: optionalAmount,
+    current_assets: optionalAmount,
+    investments_and_other_assets: optionalAmount,
+    current_liabilities: optionalAmount,
+    non_current_liabilities: optionalAmount,
+    shareholders_equity: optionalAmount,
+    beta: optionalAmount,
 
     // Metadata
     input_unit: z.enum(INPUT_UNIT_OPTIONS, {
@@ -112,6 +134,7 @@ export const createFinancialDataSchema = z
     }
   });
 
-export type CreateFinancialDataInput = z.infer<
+/** Server Action が実際に受け取る、数値文字列を変換する前の入力型です。 */
+export type CreateFinancialDataInput = z.input<
   typeof createFinancialDataSchema
 >;

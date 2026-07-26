@@ -37,7 +37,6 @@ export function StockDeleteButton({
 
       if (!result.success) {
         toast.error(result.error);
-        setIsLoading(false);
         return;
       }
 
@@ -46,6 +45,7 @@ export function StockDeleteButton({
       router.push('/stocks');
     } catch {
       toast.error('銘柄の削除に失敗しました');
+    } finally {
       setIsLoading(false);
     }
   };

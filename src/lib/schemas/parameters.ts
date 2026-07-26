@@ -1,4 +1,11 @@
+/**
+ * 理論株価計算に使うユーザー調整パラメータの既定値・表示情報・入力制約です。
+ *
+ * 既定値と制約を一箇所に置き、銘柄作成・初期化・編集の各経路で計算条件が
+ * 食い違わないようにします。
+ */
 import { z } from 'zod';
+import { stockIdSchema } from '@/lib/schemas/common';
 
 /** Default parameter values with investment-theory justifications */
 export const PARAMETER_DEFAULTS = {
@@ -12,7 +19,8 @@ export const PARAMETER_DEFAULTS = {
 export const PARAMETER_META = {
   discount_rate: {
     label: '割引率 (r)',
-    description: '日本株の長期平均リスクプレミアム（約5%）+ リスクフリーレート（約3%）',
+    description:
+      '日本株の長期平均リスクプレミアム（約5%）+ リスクフリーレート（約3%）',
     unit: '%',
     min: 0.001,
     max: 0.3,
@@ -54,7 +62,7 @@ export const PARAMETER_KEYS = Object.keys(PARAMETER_META) as ParameterKey[];
 
 export const updateParametersSchema = z
   .object({
-    stock_id: z.uuid({ error: '無効な銘柄IDです' }),
+    stock_id: stockIdSchema,
     discount_rate: z
       .number()
       .min(0.001, '割引率は0.1%以上で入力してください')

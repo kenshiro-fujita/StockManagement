@@ -13,7 +13,11 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { registerMasterMetadata, getPendingMasterRecords, extractSingleMasterRecord } from '@/actions/edinet-master';
+import {
+  registerMasterMetadata,
+  getPendingMasterRecords,
+  extractSingleMasterRecord,
+} from '@/actions/edinet-master';
 import { validateDateRange } from '@/lib/edinet/date-range';
 
 /** ローカルタイム基準の今日（UTCだとJSTの朝に「昨日」がデフォルトになるのを避ける） */
@@ -38,55 +42,87 @@ export function EdinetBatchSection() {
     }
 
     setIsRunning(true);
-
-    // --- Step 1: メタデータ登録（高速） ---
-    const totalDays = range.days;
-    const start = new Date(`${startDate}T00:00:00Z`);
     let totalRegistered = 0;
-
-    for (let i = 0; i < totalDays; i++) {
-      // 日付の加算・整形は UTC で一貫させる
-      const d = new Date(start);
-      d.setUTCDate(d.getUTCDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
-      setProgress(`Step 1/2: ${dateStr} の書類一覧を取得中... (${i + 1}/${totalDays}日)`);
-
-      try {
-        const result = await registerMasterMetadata(dateStr);
-        if (result.success) totalRegistered += result.registered;
-      } catch {
-        // 個別日付のエラーはスキップ
-      }
-    }
-
-    setProgress(`Step 1 完了: ${totalRegistered}件を登録。Step 2: 財務データを抽出中...`);
-
-    // --- Step 2: pending レコードを1件ずつパース ---
-    const { data: pending } = await getPendingMasterRecords();
+    let metadataFailures = 0;
     let extracted = 0;
+    let extractionFailures = 0;
 
-    for (const record of pending) {
-      extracted++;
+    try {
+      // --- Step 1: メタデータ登録（高速） ---
+      const totalDays = range.days;
+      const start = new Date(`${startDate}T00:00:00Z`);
+
+      for (let i = 0; i < totalDays; i++) {
+        // 日付の加算・整形は UTC で一貫させます。
+        const date = new Date(start);
+        date.setUTCDate(date.getUTCDate() + i);
+        const dateString = date.toISOString().slice(0, 10);
+        setProgress(
+          `Step 1/2: ${dateString} の書類一覧を取得中... (${i + 1}/${totalDays}日)`
+        );
+
+        try {
+          const result = await registerMasterMetadata(dateString);
+          if (result.success) {
+            totalRegistered += result.registered;
+          } else {
+            metadataFailures += 1;
+          }
+        } catch {
+          metadataFailures += 1;
+        }
+      }
+
       setProgress(
-        `Step 2/2: ${record.filer_name}（${record.fiscal_year}）を処理中... (${extracted}/${pending.length}件)`,
+        `Step 1 完了: ${totalRegistered}件を登録。Step 2: 財務データを抽出中...`
       );
 
-      try {
-        await extractSingleMasterRecord(record.doc_id);
-      } catch {
-        // エラーはDB側でerrorステータスに記録済み
+      // --- Step 2: pending レコードを1件ずつパース ---
+      const pendingResult = await getPendingMasterRecords();
+      if (!pendingResult.success) {
+        throw new Error(pendingResult.error);
       }
-    }
+      const pendingRecords = pendingResult.data;
 
-    setIsRunning(false);
-    setProgress(null);
-    toast.success(`完了: ${totalRegistered}件登録、${extracted}件の財務データを抽出しました`);
+      for (const record of pendingRecords) {
+        extracted += 1;
+        setProgress(
+          `Step 2/2: ${record.filer_name}（${record.fiscal_year}）を処理中... (${extracted}/${pendingRecords.length}件)`
+        );
+
+        try {
+          const result = await extractSingleMasterRecord(record.doc_id);
+          if (!result.success) {
+            extractionFailures += 1;
+          }
+        } catch {
+          extractionFailures += 1;
+        }
+      }
+
+      const message = `${totalRegistered}件登録、${extracted - extractionFailures}件の財務データを抽出しました`;
+      if (metadataFailures > 0 || extractionFailures > 0) {
+        toast.warning(
+          `一部失敗しました。${message}（一覧取得失敗 ${metadataFailures}日、抽出失敗 ${extractionFailures}件）`
+        );
+      } else {
+        toast.success(`完了: ${message}`);
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : 'EDINETバッチの実行に失敗しました'
+      );
+    } finally {
+      setIsRunning(false);
+      setProgress(null);
+    }
   };
 
   /** 検索範囲の日数（表示用） */
-  const days = Math.max(0, Math.ceil(
-    (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24),
-  )) + 1;
+  const displayRange = validateDateRange(startDate, endDate);
+  const days = displayRange.ok ? displayRange.days : 0;
 
   return (
     <section className="space-y-4">
@@ -95,12 +131,18 @@ export function EdinetBatchSection() {
         <h2 className="text-lg font-semibold">EDINET マスタデータ取得</h2>
       </div>
       <p className="text-xs text-muted-foreground">
-        指定した日付範囲で EDINET に提出された有価証券報告書を取得し、財務データを抽出してマスタに保存します。
+        指定した日付範囲で EDINET
+        に提出された有価証券報告書を取得し、財務データを抽出してマスタに保存します。
       </p>
-      <div className="rounded-lg border p-4 space-y-4">
+      <div className="space-y-4 rounded-lg border p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label htmlFor="batch-start" className="text-sm text-muted-foreground">開始日</label>
+            <label
+              htmlFor="batch-start"
+              className="text-sm text-muted-foreground"
+            >
+              開始日
+            </label>
             <Input
               id="batch-start"
               type="date"
@@ -111,7 +153,12 @@ export function EdinetBatchSection() {
             />
           </div>
           <div>
-            <label htmlFor="batch-end" className="text-sm text-muted-foreground">終了日</label>
+            <label
+              htmlFor="batch-end"
+              className="text-sm text-muted-foreground"
+            >
+              終了日
+            </label>
             <Input
               id="batch-end"
               type="date"
@@ -135,13 +182,17 @@ export function EdinetBatchSection() {
                 </>
               )}
             </Button>
-            <p className="text-xs text-muted-foreground mt-1">
-              {days}日間
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">{days}日間</p>
           </div>
         </div>
         {progress && (
-          <p className="text-sm text-muted-foreground animate-pulse">{progress}</p>
+          <p
+            className="animate-pulse text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            {progress}
+          </p>
         )}
       </div>
     </section>

@@ -17,7 +17,11 @@ export type AIErrorKind =
 export class AIProviderError extends Error {
   readonly kind: AIErrorKind;
 
-  constructor(kind: AIErrorKind, message: string, options?: { cause?: unknown }) {
+  constructor(
+    kind: AIErrorKind,
+    message: string,
+    options?: { cause?: unknown }
+  ) {
     super(message, options);
     this.name = 'AIProviderError';
     this.kind = kind;

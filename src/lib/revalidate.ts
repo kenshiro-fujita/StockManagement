@@ -8,8 +8,15 @@
  */
 import { revalidatePath } from 'next/cache';
 
-/** 銘柄一覧と（指定があれば）対象銘柄の詳細ページを無効化する */
+/**
+ * 銘柄一覧・比較・ポートフォリオと、指定があれば対象銘柄の詳細を無効化します。
+ *
+ * 財務データや取引は複数画面の集計元になるため、一覧だけを更新すると画面間で
+ * 数値が食い違います。銘柄に紐づく更新は常に同じ依存ページを無効化します。
+ */
 export function revalidateStockPaths(stockId?: string): void {
   revalidatePath('/stocks');
+  revalidatePath('/stocks/compare');
+  revalidatePath('/stocks/portfolio');
   if (stockId) revalidatePath(`/stocks/${stockId}`);
 }

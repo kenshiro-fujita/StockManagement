@@ -93,7 +93,9 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
             <TableHead className="w-10">
               <input
                 type="checkbox"
-                checked={stocks.length > 0 && selectedIds.size === stocks.length}
+                checked={
+                  stocks.length > 0 && selectedIds.size === stocks.length
+                }
                 onChange={toggleAll}
                 aria-label="すべての銘柄を選択"
                 className="h-4 w-4 rounded border-gray-300 bg-white accent-teal-600"
@@ -105,9 +107,9 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
             <TableHead>市場</TableHead>
             <TableHead>業種</TableHead>
             <TableHead className="text-center">評価</TableHead>
-            <TableHead className="tabular-nums text-center">優先順</TableHead>
-            <TableHead className="tabular-nums text-right">理論株価</TableHead>
-            <TableHead className="tabular-nums text-right">安全率</TableHead>
+            <TableHead className="text-center tabular-nums">優先順</TableHead>
+            <TableHead className="text-right tabular-nums">理論株価</TableHead>
+            <TableHead className="text-right tabular-nums">安全率</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -117,7 +119,10 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
             const isSelected = selectedIds.has(stock.id);
 
             return (
-              <TableRow key={stock.id} className={isSelected ? 'bg-muted/50' : ''}>
+              <TableRow
+                key={stock.id}
+                className={isSelected ? 'bg-muted/50' : ''}
+              >
                 <TableCell>
                   <input
                     type="checkbox"
@@ -138,11 +143,18 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 <TableCell>{stock.company_name}</TableCell>
                 <TableCell>
                   {stock.rosterCategory ? (
-                    <Badge variant="outline" className={ROSTER_BADGE_STYLES[stock.rosterCategory].className}>
+                    <Badge
+                      variant="outline"
+                      className={
+                        ROSTER_BADGE_STYLES[stock.rosterCategory].className
+                      }
+                    >
                       {ROSTER_CATEGORY_LABELS[stock.rosterCategory]}
                     </Badge>
                   ) : (
-                    <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                    <span className="text-muted-foreground">
+                      {NULL_DISPLAY}
+                    </span>
                   )}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
@@ -153,25 +165,36 @@ export function StockTable({ stocks }: { stocks: StockWithIndicators[] }) {
                 </TableCell>
                 <TableCell className="text-center">
                   {stock.rating != null ? (
-                    <span className="text-yellow-500" aria-label={`評価 ${stock.rating}/5`}>
+                    <span
+                      className="text-yellow-500"
+                      aria-label={`評価 ${stock.rating}/5`}
+                    >
                       <span aria-hidden="true">{'★'.repeat(stock.rating)}</span>
                     </span>
                   ) : (
-                    <span className="text-muted-foreground">{NULL_DISPLAY}</span>
+                    <span className="text-muted-foreground">
+                      {NULL_DISPLAY}
+                    </span>
                   )}
                 </TableCell>
-                <TableCell className="tabular-nums text-center text-muted-foreground">
+                <TableCell className="text-center tabular-nums text-muted-foreground">
                   {stock.buyPriority ?? NULL_DISPLAY}
                 </TableCell>
-                <TableCell className="tabular-nums text-right text-muted-foreground">
+                <TableCell className="text-right tabular-nums text-muted-foreground">
                   {formatStockPrice(stock.theoryPrice)}
                 </TableCell>
-                <TableCell className={`tabular-nums text-right ${safetyColorClass || 'text-muted-foreground'}`}>
+                <TableCell
+                  className={`text-right tabular-nums ${safetyColorClass || 'text-muted-foreground'}`}
+                >
                   {stock.safetyRateCurrent != null ? (
                     <>
                       {formatPercent(stock.safetyRateCurrent)}
                       {/* 色のみで割安/割高を伝えないよう、レベル名をSR向けに併記（WCAG 1.4.1） */}
-                      {level && <span className="sr-only">（{VALUATION_LEVEL_LABELS[level]}）</span>}
+                      {level && (
+                        <span className="sr-only">
+                          （{VALUATION_LEVEL_LABELS[level]}）
+                        </span>
+                      )}
                     </>
                   ) : (
                     NULL_DISPLAY

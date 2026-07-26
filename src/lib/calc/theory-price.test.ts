@@ -59,7 +59,12 @@ describe('calcAssetValue', () => {
 describe('calcTheoryPrice', () => {
   it('理論株価を正しく算出する（円未満切捨て）', () => {
     // (23,660,000 + 8,120,000 - 2,000,000) ÷ 10,000,000 = 2,978
-    const result = calcTheoryPrice(23_660_000, 8_120_000, 2_000_000, 10_000_000);
+    const result = calcTheoryPrice(
+      23_660_000,
+      8_120_000,
+      2_000_000,
+      10_000_000
+    );
     // 29,780,000 ÷ 10,000,000 = 2.978 → floor = 2
     // Wait: these are in yen already, let me recalculate
     // (23,660,000 + 8,120,000 - 2,000,000) = 29,780,000
@@ -79,7 +84,7 @@ describe('calcTheoryPrice', () => {
       23_660_000_000_000,
       8_120_000_000_000,
       2_000_000_000_000,
-      10_000_000,
+      10_000_000
     );
     expect(result.value).toBe(2_978_000);
   });
@@ -105,17 +110,41 @@ describe('calcGrowthTheoryPrice', () => {
   it('成長込理論株価を算出する（上限倍率なし）', () => {
     // 事業価値DCF = 100,000 × 0.7 ÷ 0.06 = 1,166,666.67
     // (1,166,666.67 + 500,000 - 200,000) ÷ 10,000 = 146.667 → floor = 146
-    const result = calcGrowthTheoryPrice(100_000, 0.3, 0.08, 0.02, 500_000, 200_000, 10_000);
+    const result = calcGrowthTheoryPrice(
+      100_000,
+      0.3,
+      0.08,
+      0.02,
+      500_000,
+      200_000,
+      10_000
+    );
     expect(result.value).toBe(146);
   });
 
   it('r ≤ g の場合はnullを返す', () => {
-    const result = calcGrowthTheoryPrice(100_000, 0.3, 0.02, 0.08, 500_000, 200_000, 10_000);
+    const result = calcGrowthTheoryPrice(
+      100_000,
+      0.3,
+      0.02,
+      0.08,
+      500_000,
+      200_000,
+      10_000
+    );
     expect(result.value).toBeNull();
   });
 
   it('sharesOutstandingがnullの場合はnullを返す', () => {
-    const result = calcGrowthTheoryPrice(100_000, 0.3, 0.08, 0.02, 500_000, 200_000, null);
+    const result = calcGrowthTheoryPrice(
+      100_000,
+      0.3,
+      0.08,
+      0.02,
+      500_000,
+      200_000,
+      null
+    );
     expect(result.value).toBeNull();
   });
 });

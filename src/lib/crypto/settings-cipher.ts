@@ -32,7 +32,7 @@ function getEncryptionKey(): Buffer | null {
   // 鍵長が誤っていると暗号強度が保証できないため、フォールバックせず明示的に失敗させる
   if (key.length !== 32) {
     throw new Error(
-      'SETTINGS_ENCRYPTION_KEY は 32 バイトを base64 エンコードした値にしてください（生成例: openssl rand -base64 32）',
+      'SETTINGS_ENCRYPTION_KEY は 32 バイトを base64 エンコードした値にしてください（生成例: openssl rand -base64 32）'
     );
   }
   return key;
@@ -48,22 +48,31 @@ export function encryptSetting(plaintext: string): string {
 
   if (!key) {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('SETTINGS_ENCRYPTION_KEY が未設定です。本番環境では必須です。');
+      throw new Error(
+        'SETTINGS_ENCRYPTION_KEY が未設定です。本番環境では必須です。'
+      );
     }
     console.warn(
-      '[settings-cipher] SETTINGS_ENCRYPTION_KEY が未設定のため平文で保存します（開発環境のみ許容）',
+      '[settings-cipher] SETTINGS_ENCRYPTION_KEY が未設定のため平文で保存します（開発環境のみ許容）'
     );
     return plaintext;
   }
 
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, 'utf8'),
+    cipher.final(),
+  ]);
   const authTag = cipher.getAuthTag();
 
   return (
     ENC_PREFIX +
-    [iv.toString('base64'), authTag.toString('base64'), encrypted.toString('base64')].join(':')
+    [
+      iv.toString('base64'),
+      authTag.toString('base64'),
+      encrypted.toString('base64'),
+    ].join(':')
   );
 }
 
@@ -77,11 +86,21 @@ export function decryptSetting(stored: string): string {
 
   const key = getEncryptionKey();
   if (!key) {
-    throw new Error('SETTINGS_ENCRYPTION_KEY が未設定のため、暗号化済みの設定値を復号できません。');
+    throw new Error(
+      'SETTINGS_ENCRYPTION_KEY が未設定のため、暗号化済みの設定値を復号できません。'
+    );
   }
 
-  const [ivB64, tagB64, dataB64] = stored.slice(ENC_PREFIX.length).split(':');
-  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivB64, 'base64'));
+  const parts = stored.slice(ENC_PREFIX.length).split(':');
+  if (parts.length !== 3 || parts.some((part) => part.length === 0)) {
+    throw new Error('暗号化済み設定値の形式が不正です。再保存してください。');
+  }
+  const [ivB64, tagB64, dataB64] = parts as [string, string, string];
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(ivB64, 'base64')
+  );
   decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
 
   return Buffer.concat([

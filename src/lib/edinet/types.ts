@@ -13,7 +13,8 @@ export type EdinetDocListResponse = {
     status: string;
     message: string;
   };
-  results: EdinetDocument[];
+  /** 書類が存在しない日など、API が results 自体を省略する場合がある。 */
+  results?: EdinetDocument[];
 };
 
 /** EDINET 書類メタデータ */

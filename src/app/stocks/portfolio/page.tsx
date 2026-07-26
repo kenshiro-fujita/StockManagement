@@ -17,24 +17,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { TradeSignalBadge } from '@/components/stocks/trade-signal-badge';
+import { ProfitLoss } from '@/components/stocks/profit-loss';
 import { getPortfolioSummary } from '@/lib/stocks/portfolio-summary';
 import { formatCurrency, formatStockPrice, NULL_DISPLAY } from '@/lib/format';
 
-/** 損益を符号色つきで表示 */
-function PL({ value, percent }: { value: number | null; percent?: number | null }) {
-  if (value == null) return <span className="text-muted-foreground">{NULL_DISPLAY}</span>;
-  const color = value > 0 ? 'text-green-600' : value < 0 ? 'text-red-600' : 'text-muted-foreground';
-  const sign = value > 0 ? '+' : '';
-  return (
-    <span className={`${color} tabular-nums`}>
-      {sign}{formatCurrency(value)}
-      {percent != null && <span className="ml-1 text-xs">（{sign}{percent}%）</span>}
-    </span>
-  );
-}
-
 /** サマリーカード */
-function TotalCard({ label, children }: { label: string; children: React.ReactNode }) {
+function TotalCard({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="rounded-lg border p-4">
       <p className="text-xs text-muted-foreground">{label}</p>
@@ -60,13 +54,20 @@ async function PortfolioContent() {
       {/* 合計サマリー */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <TotalCard label="保有銘柄数">{totals.holdingCount}銘柄</TotalCard>
-        <TotalCard label="取得原価合計">{formatCurrency(totals.bookValue)}</TotalCard>
-        <TotalCard label="評価額合計">{formatCurrency(totals.marketValue)}</TotalCard>
+        <TotalCard label="取得原価合計">
+          {formatCurrency(totals.bookValue)}
+        </TotalCard>
+        <TotalCard label="評価額合計">
+          {formatCurrency(totals.marketValue)}
+        </TotalCard>
         <TotalCard label="含み損益">
-          <PL value={totals.unrealizedPL} percent={totals.unrealizedPLPercent} />
+          <ProfitLoss
+            value={totals.unrealizedPL}
+            percent={totals.unrealizedPLPercent}
+          />
         </TotalCard>
         <TotalCard label="実現損益（累計）">
-          <PL value={totals.realizedPL} />
+          <ProfitLoss value={totals.realizedPL} />
         </TotalCard>
       </div>
 
@@ -90,7 +91,10 @@ async function PortfolioContent() {
             {rows.map((r) => (
               <TableRow key={r.stockId}>
                 <TableCell>
-                  <Link href={`/stocks/${r.stockId}`} className="font-medium underline-offset-4 hover:underline">
+                  <Link
+                    href={`/stocks/${r.stockId}`}
+                    className="font-medium underline-offset-4 hover:underline"
+                  >
                     {r.stockCode} {r.companyName}
                   </Link>
                 </TableCell>
@@ -98,25 +102,38 @@ async function PortfolioContent() {
                   <TradeSignalBadge signal={r.signal} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {r.quantity > 0 ? `${r.quantity.toLocaleString('ja-JP')}株` : NULL_DISPLAY}
+                  {r.quantity > 0
+                    ? `${r.quantity.toLocaleString('ja-JP')}株`
+                    : NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {r.averageCost != null ? formatStockPrice(r.averageCost) : NULL_DISPLAY}
+                  {r.averageCost != null
+                    ? formatStockPrice(r.averageCost)
+                    : NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {r.currentPrice != null ? formatStockPrice(r.currentPrice) : NULL_DISPLAY}
+                  {r.currentPrice != null
+                    ? formatStockPrice(r.currentPrice)
+                    : NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {r.theoryPrice != null ? formatStockPrice(r.theoryPrice) : NULL_DISPLAY}
+                  {r.theoryPrice != null
+                    ? formatStockPrice(r.theoryPrice)
+                    : NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
-                  {r.marketValue != null ? formatCurrency(r.marketValue) : NULL_DISPLAY}
+                  {r.marketValue != null
+                    ? formatCurrency(r.marketValue)
+                    : NULL_DISPLAY}
                 </TableCell>
                 <TableCell className="text-right">
-                  <PL value={r.unrealizedPL} percent={r.unrealizedPLPercent} />
+                  <ProfitLoss
+                    value={r.unrealizedPL}
+                    percent={r.unrealizedPLPercent}
+                  />
                 </TableCell>
                 <TableCell className="text-right">
-                  <PL value={r.realizedPL} />
+                  <ProfitLoss value={r.realizedPL} />
                 </TableCell>
               </TableRow>
             ))}
@@ -131,7 +148,9 @@ function PortfolioSkeleton() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-20 w-full" />
+        ))}
       </div>
       <Skeleton className="h-64 w-full" />
     </div>

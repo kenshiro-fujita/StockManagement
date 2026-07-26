@@ -1,7 +1,15 @@
+/**
+ * 銘柄ごとの評価パラメータを取得・初期化・更新する Server Actions です。
+ *
+ * デフォルト値は schema の定数だけを参照し、親銘柄の所有権を確認してから
+ * ユーザー別のパラメータへアクセスします。
+ */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
-import { revalidatePath } from 'next/cache';
+import { getAuthenticatedContext } from '@/lib/supabase/auth';
+import { checkStockOwnership } from '@/lib/supabase/ownership';
+import { revalidateStockPaths } from '@/lib/revalidate';
+import { stockIdSchema } from '@/lib/schemas/common';
 import {
   updateParametersSchema,
   PARAMETER_DEFAULTS,
@@ -9,26 +17,43 @@ import {
 } from '@/lib/schemas/parameters';
 import type { ParametersRow } from '@/lib/types/parameters';
 import type { Tables } from '@/lib/types/database';
+import type { ActionResult } from '@/lib/types/action';
+
+/** パラメータ取得で明示するカラムを一箇所に固定します。 */
+const PARAMETER_COLUMNS =
+  'id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier' as const;
 
 export async function getOrCreateParameters(
   stockId: string
-): Promise<{ success: boolean; error?: string; data?: ParametersRow }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, error: '認証が必要です' };
+): Promise<ActionResult<ParametersRow>> {
+  if (!stockIdSchema.safeParse(stockId).success) {
+    return { success: false, error: '無効な銘柄IDです' };
   }
 
-  // Try to fetch existing parameters
-  const { data: existing } = await supabase
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
+  const ownership = await checkStockOwnership(supabase, user.id, stockId);
+  if (ownership === 'error') {
+    return { success: false, error: '銘柄情報の確認に失敗しました' };
+  }
+  if (ownership === 'not_found') {
+    return { success: false, error: '対象の銘柄が見つかりませんでした' };
+  }
+
+  const { data: existing, error: fetchError } = await supabase
     .from('parameters')
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+    .select(PARAMETER_COLUMNS)
     .eq('stock_id', stockId)
     .eq('user_id', user.id)
-    .single();
+    .maybeSingle();
+
+  if (fetchError) {
+    return { success: false, error: 'パラメータの取得に失敗しました' };
+  }
 
   if (existing) {
     return { success: true, data: toParametersRow(existing) };
@@ -39,7 +64,7 @@ export async function getOrCreateParameters(
   const { data: created, error } = await supabase
     .from('parameters')
     .insert({ user_id: user.id, stock_id: stockId, ...PARAMETER_DEFAULTS })
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+    .select(PARAMETER_COLUMNS)
     .single();
 
   if (error) {
@@ -47,7 +72,7 @@ export async function getOrCreateParameters(
     if (error.code === '23505') {
       const { data: retry } = await supabase
         .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+        .select(PARAMETER_COLUMNS)
         .eq('stock_id', stockId)
         .eq('user_id', user.id)
         .single();
@@ -64,20 +89,25 @@ export async function getOrCreateParameters(
 export async function updateParameters(
   stockId: string,
   data: UpdateParametersInput
-): Promise<{ success: boolean; error?: string; data?: ParametersRow }> {
+): Promise<ActionResult<ParametersRow>> {
+  if (!stockIdSchema.safeParse(stockId).success) {
+    return { success: false, error: '無効な銘柄IDです' };
+  }
+
   const parsed = updateParametersSchema.safeParse(data);
   if (!parsed.success) {
     return { success: false, error: '入力内容に誤りがあります' };
   }
+  // URL/親コンポーネント由来のIDとフォーム内のIDを一致させ、別銘柄への誤更新を防ぎます。
+  if (parsed.data.stock_id !== stockId) {
+    return { success: false, error: '銘柄IDが一致しません' };
+  }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const context = await getAuthenticatedContext();
+  if (!context) {
     return { success: false, error: '認証が必要です' };
   }
+  const { supabase, user } = context;
 
   const { data: updated, error } = await supabase
     .from('parameters')
@@ -89,18 +119,19 @@ export async function updateParameters(
     })
     .eq('stock_id', stockId)
     .eq('user_id', user.id)
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier');
+    .select(PARAMETER_COLUMNS);
 
   if (error) {
     return { success: false, error: 'パラメータの更新に失敗しました' };
   }
 
-  if (!updated || updated.length === 0) {
+  const updatedParameters = updated?.[0];
+  if (!updatedParameters) {
     return { success: false, error: '対象のパラメータが見つかりませんでした' };
   }
 
-  revalidatePath(`/stocks/${stockId}`);
-  return { success: true, data: toParametersRow(updated[0]) };
+  revalidateStockPaths(stockId);
+  return { success: true, data: toParametersRow(updatedParameters) };
 }
 
 /** Convert Supabase NUMERIC (string) to JavaScript number */
@@ -108,8 +139,13 @@ function toParametersRow(
   // Database 型の導入によりクエリ結果が型付くため、SELECT したカラムの Pick で受ける
   row: Pick<
     Tables<'parameters'>,
-    'id' | 'stock_id' | 'discount_rate' | 'growth_rate' | 'tax_rate' | 'cap_multiplier'
-  >,
+    | 'id'
+    | 'stock_id'
+    | 'discount_rate'
+    | 'growth_rate'
+    | 'tax_rate'
+    | 'cap_multiplier'
+  >
 ): ParametersRow {
   return {
     id: row.id,

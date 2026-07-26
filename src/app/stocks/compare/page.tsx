@@ -1,3 +1,9 @@
+/**
+ * URLで指定された銘柄を同じ入力整形・計算手順で比較します。
+ *
+ * クエリ文字列はDBへ渡す前にUUID検証と重複排除を行い、取得失敗を
+ * 正常な空結果として扱わないよう明示的なエラー境界へ送ります。
+ */
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BarChart3 } from 'lucide-react';
@@ -6,15 +12,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ComparisonTable } from '@/components/stocks/comparison-table';
 import { createClient } from '@/lib/supabase/server';
 import { connection } from 'next/server';
-import { calculateAllIndicators } from '@/lib/calc';
-import type { FullFinancialDataRow } from '@/lib/types/financial-data';
-import type { ParametersRow } from '@/lib/types/parameters';
-import type { IndicatorResults } from '@/lib/types/calc';
+import { stockIdSchema } from '@/lib/schemas/common';
+import {
+  calculateStockIndicators,
+  groupByStockId,
+  indexParametersByStockId,
+  INDICATOR_COLUMNS,
+} from '@/lib/stocks/indicator-data';
+import { assertQueriesSucceeded } from '@/lib/supabase/query-error';
 
 function CompareEmpty() {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <BarChart3 className="text-muted-foreground mb-4 h-12 w-12" />
+      <BarChart3 className="mb-4 h-12 w-12 text-muted-foreground" />
       <h2 className="text-xl font-semibold">銘柄を選択してください</h2>
       <p className="mt-2 text-muted-foreground">
         銘柄一覧で2件以上の銘柄を選択し、「比較する」ボタンを押してください
@@ -37,68 +47,68 @@ async function ComparisonContent({
   const { ids } = await searchParams;
   if (!ids) return <CompareEmpty />;
 
-  const stockIds = ids.split(',').filter(Boolean);
+  const stockIds = [
+    ...new Set(
+      ids
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    ),
+  ];
   if (stockIds.length < 2) return <CompareEmpty />;
+  if (stockIds.some((id) => !stockIdSchema.safeParse(id).success)) {
+    return <CompareEmpty />;
+  }
 
   await connection();
   const supabase = await createClient();
 
-  const [{ data: stocks }, { data: allFinancialData }, { data: allParameters }] =
+  const [stocksResult, financialDataResult, parametersResult] =
     await Promise.all([
       supabase
         .from('stocks')
-        .select('id, stock_code, company_name, roster_category, rating, buy_priority')
+        .select(
+          'id, stock_code, company_name, roster_category, rating, buy_priority'
+        )
         .in('id', stockIds),
       supabase
         .from('financial_data')
-        .select('*')
+        .select(INDICATOR_COLUMNS)
         .in('stock_id', stockIds)
         .order('fiscal_year', { ascending: false }),
       supabase
         .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+        .select(
+          'id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier'
+        )
         .in('stock_id', stockIds),
     ]);
 
+  assertQueriesSucceeded('比較対象銘柄の取得', [
+    stocksResult,
+    financialDataResult,
+    parametersResult,
+  ]);
+  const stocks = stocksResult.data;
+  const allFinancialData = financialDataResult.data;
+  const allParameters = parametersResult.data;
   if (!stocks || stocks.length === 0) return <CompareEmpty />;
 
-  // stock_id ごとにグループ化
-  const financialByStock = new Map<string, FullFinancialDataRow[]>();
-  for (const fd of allFinancialData ?? []) {
-    const list = financialByStock.get(fd.stock_id) ?? [];
-    list.push(fd);
-    financialByStock.set(fd.stock_id, list);
-  }
-
-  const paramsByStock = new Map<string, ParametersRow>();
-  for (const p of allParameters ?? []) {
-    paramsByStock.set(p.stock_id, {
-      id: p.id,
-      stock_id: p.stock_id,
-      discount_rate: Number(p.discount_rate),
-      growth_rate: Number(p.growth_rate),
-      tax_rate: Number(p.tax_rate),
-      cap_multiplier: Number(p.cap_multiplier),
-    });
-  }
+  const financialByStock = groupByStockId(allFinancialData ?? []);
+  const paramsByStock = indexParametersByStockId(allParameters ?? []);
 
   // 銘柄ID順序を維持（URLクエリパラメータの順序）
-  const orderedStocks = stockIds
-    .map((id) => stocks.find((s) => s.id === id))
-    .filter(Boolean) as typeof stocks;
+  const stocksById = new Map(stocks.map((stock) => [stock.id, stock]));
+  const orderedStocks = stockIds.flatMap((id) => {
+    const stock = stocksById.get(id);
+    return stock ? [stock] : [];
+  });
 
   const comparisonStocks = orderedStocks.map((stock) => {
     const fd = financialByStock.get(stock.id) ?? [];
     const params = paramsByStock.get(stock.id) ?? null;
 
-    let results: IndicatorResults | null = null;
-    if (fd.length > 0 && params != null) {
-      try {
-        results = calculateAllIndicators(fd, params);
-      } catch {
-        // 計算失敗時は null
-      }
-    }
+    const results = calculateStockIndicators(fd, params);
 
     return {
       id: stock.id,

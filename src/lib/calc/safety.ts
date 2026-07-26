@@ -9,31 +9,35 @@
  * - 割安/適正/割高の判定: 安全率 > 0 → 割安、-10〜0 → 適正、< -10 → 割高
  */
 import type { CalcResult } from '@/lib/types/calc';
-import { CALC_VERSION } from '@/lib/types/calc';
 import { roundPercent, truncateYen } from './utils';
+import { createCalcResult, ROUNDING_RULE } from './result';
 
 /** 安全域 = 理論株価 - 現在株価（円） */
 export function calcSafetyMargin(
   theoryPrice: number | null,
   currentStockPrice: number | null,
-  label: string = '現状',
+  label: string = '現状'
 ): CalcResult<number> {
   const value =
     theoryPrice == null || currentStockPrice == null
       ? null
       : theoryPrice - currentStockPrice;
-  return {
-    value,
-    metadata: {
-      formula: `安全域（${label}）= ${label}理論株価 - 現在株価`,
-      inputs: [
-        { label: `${label}理論株価`, value: theoryPrice ?? 0, field: 'theory_price（算出値）' },
-        { label: '現在株価', value: currentStockPrice ?? 0, field: 'current_stock_price' },
-      ],
-      rounding: 'なし（整数同士の減算）',
-      calcVersion: CALC_VERSION,
-    },
-  };
+  return createCalcResult(value, {
+    formula: `安全域（${label}）= ${label}理論株価 - 現在株価`,
+    inputs: [
+      {
+        label: `${label}理論株価`,
+        value: theoryPrice ?? 0,
+        field: 'theory_price（算出値）',
+      },
+      {
+        label: '現在株価',
+        value: currentStockPrice ?? 0,
+        field: 'current_stock_price',
+      },
+    ],
+    rounding: ROUNDING_RULE.integerSubtraction,
+  });
 }
 
 /**
@@ -46,24 +50,28 @@ export function calcSafetyMargin(
 export function calcSafetyRate(
   theoryPrice: number | null,
   currentStockPrice: number | null,
-  label: string = '現状',
+  label: string = '現状'
 ): CalcResult<number> {
   const value =
     theoryPrice == null || theoryPrice <= 0 || currentStockPrice == null
       ? null
       : roundPercent(((theoryPrice - currentStockPrice) / theoryPrice) * 100);
-  return {
-    value,
-    metadata: {
-      formula: `安全率（${label}）= (${label}理論株価 - 現在株価) ÷ ${label}理論株価 × 100`,
-      inputs: [
-        { label: `${label}理論株価`, value: theoryPrice ?? 0, field: 'theory_price（算出値）' },
-        { label: '現在株価', value: currentStockPrice ?? 0, field: 'current_stock_price' },
-      ],
-      rounding: '小数点以下第2位を四捨五入',
-      calcVersion: CALC_VERSION,
-    },
-  };
+  return createCalcResult(value, {
+    formula: `安全率（${label}）= (${label}理論株価 - 現在株価) ÷ ${label}理論株価 × 100`,
+    inputs: [
+      {
+        label: `${label}理論株価`,
+        value: theoryPrice ?? 0,
+        field: 'theory_price（算出値）',
+      },
+      {
+        label: '現在株価',
+        value: currentStockPrice ?? 0,
+        field: 'current_stock_price',
+      },
+    ],
+    rounding: ROUNDING_RULE.twoDecimals,
+  });
 }
 
 /**
@@ -77,7 +85,9 @@ export function calcSafetyRate(
  */
 export type ValuationLevel = 'cheap' | 'fair' | 'expensive';
 
-export function getValuationLevel(safetyRateValue: number | null): ValuationLevel | null {
+export function getValuationLevel(
+  safetyRateValue: number | null
+): ValuationLevel | null {
   if (safetyRateValue == null) return null;
   if (safetyRateValue > 0) return 'cheap';
   if (safetyRateValue >= -10) return 'fair';
@@ -104,22 +114,22 @@ export const VALUATION_LEVEL_LABELS: Record<ValuationLevel, string> = {
 export function calcIdealBuyPrice(
   theoryPrice: number | null,
   label: string = '現状',
-  discountFactor: number = 0.5,
+  discountFactor: number = 0.5
 ): CalcResult<number> {
   const value =
     theoryPrice == null || theoryPrice <= 0
       ? null
       : truncateYen(theoryPrice * discountFactor);
-  return {
-    value,
-    metadata: {
-      formula: `理想購入株価（対${label}）= ${label}理論株価 × ${discountFactor}`,
-      inputs: [
-        { label: `${label}理論株価`, value: theoryPrice ?? 0, field: 'theory_price（算出値）' },
-        { label: '割引係数', value: discountFactor, field: 'discount_factor' },
-      ],
-      rounding: '円未満切捨て',
-      calcVersion: CALC_VERSION,
-    },
-  };
+  return createCalcResult(value, {
+    formula: `理想購入株価（対${label}）= ${label}理論株価 × ${discountFactor}`,
+    inputs: [
+      {
+        label: `${label}理論株価`,
+        value: theoryPrice ?? 0,
+        field: 'theory_price（算出値）',
+      },
+      { label: '割引係数', value: discountFactor, field: 'discount_factor' },
+    ],
+    rounding: ROUNDING_RULE.truncateYen,
+  });
 }

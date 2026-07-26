@@ -14,7 +14,7 @@ async function buildXbrlZip(htmlBody: string): Promise<ArrayBuffer> {
   const zip = new JSZip();
   zip.file(
     'XBRL/PublicDoc/0101010_honbun_test.htm',
-    `<!DOCTYPE html><html><body>${htmlBody}</body></html>`,
+    `<!DOCTYPE html><html><body>${htmlBody}</body></html>`
   );
   return zip.generateAsync({ type: 'arraybuffer' });
 }
@@ -90,7 +90,7 @@ describe('従来 XBRL（.xbrl）のパース', () => {
       <xbrli:xbrl xmlns:xbrli="http://www.xbrl.org/2003/instance" xmlns:jppfs_cor="http://example.com/jppfs">
         <jppfs_cor:NetSales contextRef="CurrentYearDuration" unitRef="JPY" decimals="0">4112318000</jppfs_cor:NetSales>
         <jppfs_cor:TotalAssets contextRef="CurrentYearInstant" unitRef="JPY" decimals="0">9876543210</jppfs_cor:TotalAssets>
-      </xbrli:xbrl>`,
+      </xbrli:xbrl>`
     );
     const buf = await zip.generateAsync({ type: 'arraybuffer' });
     const summary = await extractFinancialMetricsFromXbrl(buf);

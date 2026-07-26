@@ -13,7 +13,9 @@ describe('calcEquityRatio', () => {
   it('自己資本比率を正しく算出する', () => {
     const result = calcEquityRatio(4_000_000, 10_000_000);
     expect(result.value).toBe(40);
-    expect(result.metadata.formula).toBe('自己資本比率 = 自己資本 ÷ 総資産 × 100');
+    expect(result.metadata.formula).toBe(
+      '自己資本比率 = 自己資本 ÷ 総資産 × 100'
+    );
     expect(result.metadata.calcVersion).toBe(CALC_VERSION);
   });
 
@@ -103,7 +105,7 @@ describe('calcROIC', () => {
   it('メタデータに入力値の参照が含まれる', () => {
     const result = calcROIC(800_000, 0.3, 4_000_000, 2_000_000);
     expect(result.metadata.inputs).toHaveLength(4);
-    expect(result.metadata.inputs[0].field).toBe('operating_income');
-    expect(result.metadata.inputs[1].field).toBe('tax_rate');
+    expect(result.metadata.inputs[0]?.field).toBe('operating_income');
+    expect(result.metadata.inputs[1]?.field).toBe('tax_rate');
   });
 });

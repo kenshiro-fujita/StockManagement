@@ -29,7 +29,7 @@ describe('createStockSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         '銘柄コードを入力してください'
       );
     }
@@ -42,7 +42,7 @@ describe('createStockSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         '銘柄コードは10文字以内で入力してください'
       );
     }
@@ -55,7 +55,7 @@ describe('createStockSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe('企業名を入力してください');
+      expect(result.error.issues[0]?.message).toBe('企業名を入力してください');
     }
   });
 
@@ -66,7 +66,7 @@ describe('createStockSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error.issues[0].message).toBe(
+      expect(result.error.issues[0]?.message).toBe(
         '企業名は100文字以内で入力してください'
       );
     }

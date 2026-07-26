@@ -1,25 +1,34 @@
-export type FullFinancialDataRow = {
-  id: string;
-  fiscal_year: number;
-  fiscal_quarter: string;
-  consolidation_type: string;
-  revenue: number;
-  operating_income: number;
-  net_income: number;
-  total_assets: number;
-  equity: number;
-  interest_bearing_debt: number | null;
-  operating_cf: number | null;
-  investing_cf: number | null;
-  shares_outstanding: number | null;
-  interest_expense: number | null;
-  current_stock_price: number | null;
-  cash_and_equivalents: number | null;
-  current_assets: number | null;
-  investments_and_other_assets: number | null;
-  current_liabilities: number | null;
-  non_current_liabilities: number | null;
-  shareholders_equity: number | null;
-  beta: number | null;
-  input_unit: string;
-};
+/**
+ * 計算エンジンと財務入力UIが共有する財務データです。
+ *
+ * DB行から利用する列だけを選ぶことで、スキーマと同じ型を手書きで
+ * 二重管理せず、認証情報やタイムスタンプも計算層へ持ち込みません。
+ */
+import type { Tables } from '@/lib/types/database';
+
+export type FullFinancialDataRow = Pick<
+  Tables<'financial_data'>,
+  | 'id'
+  | 'fiscal_year'
+  | 'fiscal_quarter'
+  | 'consolidation_type'
+  | 'revenue'
+  | 'operating_income'
+  | 'net_income'
+  | 'total_assets'
+  | 'equity'
+  | 'interest_bearing_debt'
+  | 'operating_cf'
+  | 'investing_cf'
+  | 'shares_outstanding'
+  | 'interest_expense'
+  | 'current_stock_price'
+  | 'cash_and_equivalents'
+  | 'current_assets'
+  | 'investments_and_other_assets'
+  | 'current_liabilities'
+  | 'non_current_liabilities'
+  | 'shareholders_equity'
+  | 'beta'
+  | 'input_unit'
+>;

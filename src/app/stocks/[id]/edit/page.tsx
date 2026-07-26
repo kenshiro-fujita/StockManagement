@@ -1,3 +1,6 @@
+/**
+ * 銘柄IDを検証して編集対象を取得し、取得失敗と未存在を区別します。
+ */
 import { Suspense } from 'react';
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
@@ -5,17 +8,24 @@ import { connection } from 'next/server';
 import { StockForm } from '@/components/stocks/stock-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { createClient } from '@/lib/supabase/server';
+import { stockIdSchema } from '@/lib/schemas/common';
+import { assertQueriesSucceeded } from '@/lib/supabase/query-error';
 
 async function StockEditForm({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const parsedId = stockIdSchema.safeParse(id);
+  if (!parsedId.success) notFound();
+
   await connection();
   const supabase = await createClient();
-  const { data: stock } = await supabase
+  const stockResult = await supabase
     .from('stocks')
     .select('id, stock_code, company_name, market, sector, business_segment')
-    .eq('id', id)
-    .single();
+    .eq('id', parsedId.data)
+    .maybeSingle();
 
+  assertQueriesSucceeded('編集対象銘柄の取得', [stockResult]);
+  const stock = stockResult.data;
   if (!stock) notFound();
 
   return (

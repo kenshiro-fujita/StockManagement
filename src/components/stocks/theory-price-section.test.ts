@@ -86,10 +86,12 @@ function makePeriod(overrides: Record<string, number | null> = {}) {
 
 function makeResults(
   periodOverrides: Record<string, number | null> = {},
-  movingAvgROIC: number | null = 9,
+  movingAvgROIC: number | null = 9
 ): IndicatorResults {
   return {
-    period: makePeriod(periodOverrides) as unknown as IndicatorResults['period'],
+    period: makePeriod(
+      periodOverrides
+    ) as unknown as IndicatorResults['period'],
     movingAverageROIC: calc(movingAvgROIC),
   };
 }

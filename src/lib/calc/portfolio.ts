@@ -8,7 +8,8 @@
  * 証券会社の取得単価表示と一致するため）。手数料は買い時に取得原価へ加算、
  * 売り時に受取額から減算する。
  */
-import { roundYen, truncateYen } from './utils';
+import { calcIdealBuyPrice } from './safety';
+import { roundYen } from './utils';
 
 /** 取引1件（集計に必要な最小限のフィールド） */
 export type TransactionInput = {
@@ -45,57 +46,93 @@ export type PositionValuation = {
   unrealizedPLPercent: number | null;
 };
 
+/** 集計途中の小数精度を保つため、公開結果へ変換する最後まで丸めない内部状態。 */
+type PositionState = {
+  quantity: number;
+  bookValue: number;
+  realizedPL: number;
+  totalBoughtQuantity: number;
+  totalSoldQuantity: number;
+};
+
+/** リクエスト間で状態を共有しないよう、集計ごとに新しい状態を生成する。 */
+function createEmptyPositionState(): PositionState {
+  return {
+    quantity: 0,
+    bookValue: 0,
+    realizedPL: 0,
+    totalBoughtQuantity: 0,
+    totalSoldQuantity: 0,
+  };
+}
+
+/** 買付手数料を取得原価へ含め、移動平均の元になる簿価を更新する。 */
+function applyBuy(state: PositionState, transaction: TransactionInput): void {
+  state.bookValue +=
+    transaction.quantity * transaction.unit_price + transaction.fee;
+  state.quantity += transaction.quantity;
+  state.totalBoughtQuantity += transaction.quantity;
+}
+
+/**
+ * 売却時点の移動平均単価で原価を取り崩す。
+ *
+ * 既存データが保有数量を超えていても負のポジションを作らないことが重要なため、
+ * 集計対象はその時点の保有数量までに制限する。
+ */
+function applySell(state: PositionState, transaction: TransactionInput): void {
+  const sellQuantity = Math.min(transaction.quantity, state.quantity);
+  const averageCost = state.quantity > 0 ? state.bookValue / state.quantity : 0;
+  const proceeds = sellQuantity * transaction.unit_price - transaction.fee;
+  const costBasis = averageCost * sellQuantity;
+
+  state.realizedPL += proceeds - costBasis;
+  state.quantity -= sellQuantity;
+  state.bookValue = averageCost * state.quantity;
+  state.totalSoldQuantity += sellQuantity;
+}
+
+/** 移動平均は順序に依存するため、入力配列を変更せず約定日順のコピーを作る。 */
+function sortByTradeDate(
+  transactions: readonly TransactionInput[]
+): TransactionInput[] {
+  return [...transactions].sort((a, b) =>
+    a.trade_date < b.trade_date ? -1 : a.trade_date > b.trade_date ? 1 : 0
+  );
+}
+
 /**
  * 取引履歴から保有ポジションを集計する（移動平均法）。
  * 約定日昇順で処理する（同日は配列順）。
  */
-export function calcPosition(transactions: TransactionInput[]): Position {
-  // 約定日の昇順で処理（移動平均は順序に依存するため）
-  const sorted = [...transactions].sort((a, b) =>
-    a.trade_date < b.trade_date ? -1 : a.trade_date > b.trade_date ? 1 : 0,
-  );
+export function calcPosition(
+  transactions: readonly TransactionInput[]
+): Position {
+  const state = createEmptyPositionState();
 
-  let quantity = 0;
-  let bookValue = 0; // 現在保有分の簿価合計
-  let realizedPL = 0;
-  let totalBought = 0;
-  let totalSold = 0;
-
-  for (const tx of sorted) {
-    if (tx.transaction_type === 'buy') {
-      // 取得原価 = 株数×単価 + 手数料 を簿価に加算
-      bookValue += tx.quantity * tx.unit_price + tx.fee;
-      quantity += tx.quantity;
-      totalBought += tx.quantity;
-    } else {
-      // 売り: 保有を超える売却は保有分までに丸める（データ不整合時の保険）
-      const sellQty = Math.min(tx.quantity, quantity);
-      const avgCost = quantity > 0 ? bookValue / quantity : 0;
-      // 受取額 = 株数×単価 - 手数料、原価 = 平均取得単価 × 売却株数
-      const proceeds = sellQty * tx.unit_price - tx.fee;
-      const costBasis = avgCost * sellQty;
-      realizedPL += proceeds - costBasis;
-      // 簿価は平均単価 × 残数量で更新（平均単価自体は売却で変わらない）
-      quantity -= sellQty;
-      bookValue = avgCost * quantity;
-      totalSold += sellQty;
+  for (const transaction of sortByTradeDate(transactions)) {
+    if (transaction.transaction_type === 'buy') {
+      applyBuy(state, transaction);
+      continue;
     }
+    applySell(state, transaction);
   }
 
   return {
-    quantity,
-    averageCost: quantity > 0 ? roundYen(bookValue / quantity) : null,
-    bookValue: roundYen(bookValue),
-    realizedPL: roundYen(realizedPL),
-    totalBoughtQuantity: totalBought,
-    totalSoldQuantity: totalSold,
+    quantity: state.quantity,
+    averageCost:
+      state.quantity > 0 ? roundYen(state.bookValue / state.quantity) : null,
+    bookValue: roundYen(state.bookValue),
+    realizedPL: roundYen(state.realizedPL),
+    totalBoughtQuantity: state.totalBoughtQuantity,
+    totalSoldQuantity: state.totalSoldQuantity,
   };
 }
 
 /** 現在価格から評価額・未実現損益を算出する */
 export function calcPositionValuation(
   position: Position,
-  currentPrice: number | null,
+  currentPrice: number | null
 ): PositionValuation | null {
   if (currentPrice == null || position.quantity <= 0) return null;
 
@@ -136,7 +173,10 @@ export function getTradeSignal(params: {
   const { currentPrice, theoryPrice, idealBuyPrice, hasPosition } = params;
 
   if (currentPrice == null || theoryPrice == null || theoryPrice <= 0) {
-    return { signal: 'hold', reason: '理論株価または現在株価が未算出のため判定できません' };
+    return {
+      signal: 'hold',
+      reason: '理論株価または現在株価が未算出のため判定できません',
+    };
   }
 
   if (idealBuyPrice != null && currentPrice <= idealBuyPrice) {
@@ -167,8 +207,7 @@ export function getTradeSignal(params: {
  */
 export function idealBuyPriceFromTheory(
   theoryPrice: number | null,
-  discountFactor = 0.5,
+  discountFactor = 0.5
 ): number | null {
-  if (theoryPrice == null || theoryPrice <= 0) return null;
-  return truncateYen(theoryPrice * discountFactor);
+  return calcIdealBuyPrice(theoryPrice, '現状', discountFactor).value;
 }

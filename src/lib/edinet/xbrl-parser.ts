@@ -15,37 +15,21 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
 import * as cheerio from 'cheerio';
-import { detectAccountingStandard } from './taxonomy';
-import { normalizeNumber, type ExtractionSummary } from './csv-parser';
 import {
-  extractAllMetrics,
-  findDeiRawValue,
+  createExtractionSummary,
+  type ExtractionSummary,
   type NormalizedFact,
 } from './extraction';
-
-/**
- * XBRL から抽出した1つの Fact
- * CSV の CsvFact と異なり、value は既に数値化済み（iXBRL の scale/sign 適用済み）。
- * rawValue には生テキストを保持する — AccountingStandardsDEI（"IFRS"）や
- * CurrentFiscalYearEndDateDEI（"2025-03-31"）は数値化すると null に潰れ、
- * 会計基準判定と年度推定が恒久的に壊れるため（過去に実際に発生したバグ）
- */
-type XbrlFact = {
-  localName: string;
-  contextRef: string;
-  unitRef: string;
-  value: number | null;
-  rawValue: string;
-};
+import { extractLocalName, normalizeNumber } from './fact-utils';
 
 /**
  * ZIP (type=1) から XBRL/iXBRL ファイルを抽出してパースする
  */
 export async function extractFinancialMetricsFromXbrl(
-  zipData: ArrayBuffer,
+  zipData: ArrayBuffer
 ): Promise<ExtractionSummary> {
   const zip = await JSZip.loadAsync(zipData);
-  const allFacts: XbrlFact[] = [];
+  const facts: NormalizedFact[] = [];
 
   for (const [path, file] of Object.entries(zip.files)) {
     if (file.dir) continue;
@@ -58,32 +42,66 @@ export async function extractFinancialMetricsFromXbrl(
 
     if (path.endsWith('.xbrl')) {
       const content = await file.async('string');
-      allFacts.push(...parseTraditionalXbrl(content));
+      facts.push(...parseTraditionalXbrl(content));
     } else if (path.endsWith('.htm') || path.endsWith('.html')) {
       const content = await file.async('string');
-      allFacts.push(...parseInlineXbrl(content));
+      facts.push(...parseInlineXbrl(content));
     }
   }
 
-  // 共有抽出モジュールの NormalizedFact へ変換（contextRef → contextId の名称差のみ）
-  const facts: NormalizedFact[] = allFacts.map((f) => ({
-    localName: f.localName,
-    contextId: f.contextRef,
-    unitId: f.unitRef,
-    value: f.value,
-    rawValue: f.rawValue,
-  }));
+  return createExtractionSummary(facts, 'xbrl');
+}
 
-  // 会計基準と決算期末は文字列ファクト（rawValue）から判定する
-  const standard = detectAccountingStandard(findDeiRawValue(facts, 'AccountingStandardsDEI'));
-  const periodEnd = findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI');
+/**
+ * fast-xml-parser は isArray 設定により属性も配列へ包むため、先頭値へ統一する。
+ */
+function readXmlAttribute(value: unknown): string {
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  return value != null ? String(value) : '';
+}
 
-  return {
-    accountingStandard: standard,
-    periodEnd,
-    sourceType: 'xbrl',
-    results: extractAllMetrics(facts, standard),
-  };
+/**
+ * XML の JSON ツリーを走査し、contextRef を持つ名前空間付き要素だけを収集する。
+ *
+ * コンテキスト要素やリンク要素まで Fact と誤認しないため、従来どおり
+ * 名前空間付きの親要素にある #text だけを対象とする。
+ */
+function collectTraditionalFacts(
+  node: unknown,
+  parentKey: string,
+  facts: NormalizedFact[]
+): void {
+  if (node == null) return;
+
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      collectTraditionalFacts(item, parentKey, facts);
+    }
+    return;
+  }
+
+  if (typeof node !== 'object') return;
+
+  const record = node as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    if (key.startsWith('@_')) continue;
+
+    if (typeof value === 'object' && value !== null) {
+      collectTraditionalFacts(value, key, facts);
+      continue;
+    }
+
+    if (key !== '#text' || !parentKey.includes(':')) continue;
+
+    const rawValue = String(value);
+    facts.push({
+      localName: extractLocalName(parentKey),
+      contextId: readXmlAttribute(record['@_contextRef']),
+      unitId: readXmlAttribute(record['@_unitRef']),
+      value: normalizeNumber(rawValue),
+      rawValue,
+    });
+  }
 }
 
 /**
@@ -97,61 +115,18 @@ export async function extractFinancialMetricsFromXbrl(
  * - テキストノードは "#text" キー
  * - isArray: () => true で全要素を配列化（一貫した走査のため）
  */
-function parseTraditionalXbrl(xmlContent: string): XbrlFact[] {
+function parseTraditionalXbrl(xmlContent: string): NormalizedFact[] {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
-    removeNSPrefix: false,     // 名前空間プレフィックスを保持（ローカル名抽出は自分で行う）
-    isArray: () => true,       // 全要素を配列として扱う（単一要素でも [elem] の形になる）
+    removeNSPrefix: false, // 名前空間プレフィックスを保持（ローカル名抽出は自分で行う）
+    isArray: () => true, // 全要素を配列として扱う（単一要素でも [elem] の形になる）
   });
 
   const doc = parser.parse(xmlContent);
-  const facts: XbrlFact[] = [];
+  const facts: NormalizedFact[] = [];
 
-  // JSON ツリーを再帰的に走査し、contextRef 属性を持つテキストノードを Fact として収集する
-  function traverse(obj: unknown, parentKey = '') {
-    if (obj == null) return;
-    if (Array.isArray(obj)) {
-      for (const item of obj) traverse(item, parentKey);
-      return;
-    }
-    if (typeof obj !== 'object') return;
-
-    const record = obj as Record<string, unknown>;
-    for (const [key, val] of Object.entries(record)) {
-      if (key.startsWith('@_')) continue;
-
-      if (typeof val === 'object' && val !== null) {
-        traverse(val, key);
-        continue;
-      }
-
-      // 属性付きオブジェクトのパターン
-      if (key === '#text' && parentKey.includes(':')) {
-        const attrs = record as Record<string, unknown>;
-        // isArray: () => true の設定は属性値も配列化する（@_contextRef が ["..."] になる）。
-        // 配列のまま文字列として扱うとコンテキスト照合が常に失敗するため、必ず取り出す
-        const attrOf = (v: unknown): string =>
-          Array.isArray(v) ? String(v[0] ?? '') : v != null ? String(v) : '';
-        const contextRef = attrOf(attrs['@_contextRef']);
-        const unitRef = attrOf(attrs['@_unitRef']);
-        const localName = parentKey.includes(':')
-          ? parentKey.split(':').pop()!
-          : parentKey;
-
-        const rawValue = String(val);
-        facts.push({
-          localName,
-          contextRef,
-          unitRef,
-          value: normalizeNumber(rawValue),
-          rawValue,
-        });
-      }
-    }
-  }
-
-  traverse(doc);
+  collectTraditionalFacts(doc, '', facts);
   return facts;
 }
 
@@ -166,9 +141,9 @@ function parseTraditionalXbrl(xmlContent: string): XbrlFact[] {
  * - sign: "-" なら値を負にする（マイナス記号がタグの外に書かれる場合がある）
  * - name: "jppfs_cor:NetSales" 形式 → コロン以降がローカル名
  */
-function parseInlineXbrl(htmlContent: string): XbrlFact[] {
+function parseInlineXbrl(htmlContent: string): NormalizedFact[] {
   const $ = cheerio.load(htmlContent, { xmlMode: false });
-  const facts: XbrlFact[] = [];
+  const facts: NormalizedFact[] = [];
 
   // ix:nonFraction — 数値データ（売上高、純利益等）
   $('ix\\:nonFraction, ix\\:nonfraction').each((_, el) => {
@@ -176,9 +151,9 @@ function parseInlineXbrl(htmlContent: string): XbrlFact[] {
     const name = $el.attr('name') ?? '';
     const contextRef = $el.attr('contextref') ?? '';
     const unitRef = $el.attr('unitref') ?? '';
-    const scale = parseInt($el.attr('scale') ?? '0', 10);  // scale=0 ならそのまま
-    const sign = $el.attr('sign') ?? '';                     // sign="-" なら負
-    const rawText = $el.text().trim();                       // タグ内テキスト（表示値）
+    const scale = parseInt($el.attr('scale') ?? '0', 10); // scale=0 ならそのまま
+    const sign = $el.attr('sign') ?? ''; // sign="-" なら負
+    const rawText = $el.text().trim(); // タグ内テキスト（表示値）
 
     let num = normalizeNumber(rawText);
     // scale 属性の適用: 表示値 × 10^scale = 実際の値（円）
@@ -190,9 +165,15 @@ function parseInlineXbrl(htmlContent: string): XbrlFact[] {
       num = -Math.abs(num);
     }
 
-    const localName = name.includes(':') ? name.split(':').pop()! : name;
+    const localName = extractLocalName(name);
 
-    facts.push({ localName, contextRef, unitRef, value: num, rawValue: rawText });
+    facts.push({
+      localName,
+      contextId: contextRef,
+      unitId: unitRef,
+      value: num,
+      rawValue: rawText,
+    });
   });
 
   // ix:nonNumeric — 文字列データ（会計基準判定等に使用）
@@ -201,13 +182,13 @@ function parseInlineXbrl(htmlContent: string): XbrlFact[] {
     const $el = $(el);
     const name = $el.attr('name') ?? '';
     const contextRef = $el.attr('contextref') ?? '';
-    const localName = name.includes(':') ? name.split(':').pop()! : name;
+    const localName = extractLocalName(name);
     const rawValue = $el.text().trim();
 
     facts.push({
       localName,
-      contextRef,
-      unitRef: '',
+      contextId: contextRef,
+      unitId: '',
       value: normalizeNumber(rawValue),
       rawValue,
     });

@@ -7,7 +7,13 @@
  * ここでは「割高・減益・債務超過」系の銘柄で起こるケースを固定する。
  */
 import { describe, it, expect } from 'vitest';
-import { roundPercent, roundYen, truncateYen, resolveEquity } from './utils';
+import {
+  roundPercent,
+  roundToTwoDecimals,
+  roundYen,
+  truncateYen,
+  resolveEquity,
+} from './utils';
 import { calcSafetyRate, calcIdealBuyPrice, getValuationLevel } from './safety';
 import { calcPER } from './stock-metrics';
 import { calculateAllIndicators } from './index';
@@ -21,6 +27,11 @@ describe('丸め関数の負値対称性', () => {
     expect(roundPercent(-0.125)).toBe(-0.13); // Math.round 直使用だと -0.12 になる
     expect(roundPercent(3.141)).toBe(3.14);
     expect(roundPercent(-3.141)).toBe(-3.14);
+  });
+
+  it('汎用の小数2桁丸めもパーセンテージと同じ負値対称ルールを使う', () => {
+    expect(roundToTwoDecimals(2.675)).toBe(2.68);
+    expect(roundToTwoDecimals(-2.675)).toBe(-2.68);
   });
 
   it('roundYen: 0.5 は絶対値基準で切り上げ', () => {

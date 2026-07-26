@@ -11,7 +11,9 @@ async function SettingsContent() {
     getAllSettings(),
     createClient(),
   ]);
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   return (
     <SettingsForm

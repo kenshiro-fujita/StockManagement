@@ -9,8 +9,10 @@
  */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import type { UserAttributes } from '@supabase/supabase-js';
+import { getAuthenticatedContext } from '@/lib/supabase/auth';
 import { passwordSchema, emailSchema } from '@/lib/schemas/auth';
+import type { ActionResult } from '@/lib/types/action';
 import { z } from 'zod';
 
 const displayNameSchema = z
@@ -19,66 +21,80 @@ const displayNameSchema = z
   .min(1, '表示名を入力してください')
   .max(50, '表示名は50文字以内で入力してください');
 
+/**
+ * 現在の認証ユーザーを更新し、SDK の生エラーをサーバーログへ閉じ込めます。
+ */
+async function updateCurrentUser(
+  attributes: UserAttributes,
+  operation: string,
+  publicError: string
+): Promise<ActionResult> {
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+
+  const { error } = await context.supabase.auth.updateUser(attributes);
+  if (error) {
+    console.error(`${operation} failed:`, error);
+    return { success: false, error: publicError };
+  }
+
+  return { success: true };
+}
+
 /** 表示名を更新する */
 export async function updateDisplayName(
-  displayName: string,
-): Promise<{ success: boolean; error?: string }> {
+  displayName: string
+): Promise<ActionResult> {
   const parsed = displayNameSchema.safeParse(displayName);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? '入力内容に誤りがあります',
+    };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({
-    data: { display_name: parsed.data },
-  });
-
-  if (error) {
-    console.error('updateDisplayName failed:', error);
-    return { success: false, error: '表示名の更新に失敗しました' };
-  }
-  return { success: true };
+  return updateCurrentUser(
+    { data: { display_name: parsed.data } },
+    'updateDisplayName',
+    '表示名の更新に失敗しました'
+  );
 }
 
 /** パスワードを変更する */
 export async function updatePassword(
-  newPassword: string,
-): Promise<{ success: boolean; error?: string }> {
+  newPassword: string
+): Promise<ActionResult> {
   // 文字数ルールは schemas/auth の passwordSchema を共有（サインアップとズレないように）
   const parsed = passwordSchema.safeParse(newPassword);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? 'パスワードが不正です' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'パスワードが不正です',
+    };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({
-    password: parsed.data,
-  });
-
-  if (error) {
-    console.error('updatePassword failed:', error);
-    return { success: false, error: 'パスワードの変更に失敗しました' };
-  }
-  return { success: true };
+  return updateCurrentUser(
+    { password: parsed.data },
+    'updatePassword',
+    'パスワードの変更に失敗しました'
+  );
 }
 
 /** メールアドレスを変更する */
-export async function updateEmail(
-  newEmail: string,
-): Promise<{ success: boolean; error?: string }> {
+export async function updateEmail(newEmail: string): Promise<ActionResult> {
   const parsed = emailSchema.safeParse(newEmail);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message ?? 'メールアドレスが不正です' };
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'メールアドレスが不正です',
+    };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.updateUser({
-    email: parsed.data,
-  });
-
-  if (error) {
-    console.error('updateEmail failed:', error);
-    return { success: false, error: 'メールアドレスの変更に失敗しました' };
-  }
-  return { success: true };
+  return updateCurrentUser(
+    { email: parsed.data },
+    'updateEmail',
+    'メールアドレスの変更に失敗しました'
+  );
 }

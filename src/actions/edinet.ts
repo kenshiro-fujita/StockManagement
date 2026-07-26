@@ -11,34 +11,46 @@
  */
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { getAuthenticatedContext } from '@/lib/supabase/auth';
+import { checkStockOwnership, findOwnedStock } from '@/lib/supabase/ownership';
 import { revalidateStockPaths } from '@/lib/revalidate';
 import { searchAnnualReports, fetchDocumentData } from '@/lib/edinet/client';
 import { resolveEdinetApiKey } from '@/lib/edinet/api-key';
 import { validateDateRange } from '@/lib/edinet/date-range';
 import { extractionToFinancialColumns } from '@/lib/edinet/extraction-to-row';
-import { extractFinancialMetrics, type ExtractionSummary } from '@/lib/edinet/csv-parser';
+import {
+  extractFinancialMetrics,
+  type ExtractionSummary,
+} from '@/lib/edinet/csv-parser';
 import { extractFinancialMetricsFromXbrl } from '@/lib/edinet/xbrl-parser';
 import type { AnnualReport } from '@/lib/edinet/types';
 import type { TablesInsert } from '@/lib/types/database';
+import type { ActionResult } from '@/lib/types/action';
+import {
+  edinetDocumentIdSchema,
+  fourDigitStockCodeSchema,
+} from '@/lib/schemas/common';
+import {
+  existingFinancialDataSchema,
+  mappingChangesSchema,
+  saveEdinetDocumentSchema,
+  saveExtractedDataSchema,
+} from '@/lib/schemas/edinet-actions';
+import { matchesStockCode } from '@/actions/_internal/edinet';
 
 /** 証券コードと日付範囲を指定して EDINET から有価証券報告書を検索する */
 export async function searchEdinetDocuments(
   stockCode: string,
   startDate: string,
-  endDate: string,
-): Promise<{ success: boolean; error?: string; data?: AnnualReport[] }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  endDate: string
+): Promise<ActionResult<AnnualReport[]>> {
+  const context = await getAuthenticatedContext();
+  if (!context) {
     return { success: false, error: '認証が必要です' };
   }
 
   // 入力検証（証券コードは4桁、日付範囲は最大6か月）
-  if (!/^\d{4}$/.test(stockCode)) {
+  if (!fourDigitStockCodeSchema.safeParse(stockCode).success) {
     return { success: false, error: '証券コードは4桁の数字で入力してください' };
   }
   const range = validateDateRange(startDate, endDate);
@@ -49,7 +61,12 @@ export async function searchEdinetDocuments(
   try {
     // キーはリクエストごとに解決する（モジュールキャッシュ禁止 — api-key.ts 参照）
     const apiKey = await resolveEdinetApiKey();
-    const reports = await searchAnnualReports(stockCode, startDate, endDate, apiKey);
+    const reports = await searchAnnualReports(
+      stockCode,
+      startDate,
+      endDate,
+      apiKey
+    );
 
     if (reports.length === 0) {
       return { success: true, data: [] };
@@ -57,7 +74,10 @@ export async function searchEdinetDocuments(
 
     return { success: true, data: reports };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'EDINET APIへの接続に失敗しました';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'EDINET APIへの接続に失敗しました';
     return { success: false, error: message };
   }
 }
@@ -65,42 +85,66 @@ export async function searchEdinetDocuments(
 /** 検索結果の書類メタデータを edinet_documents テーブルに保存する（upsert） */
 export async function saveEdinetDocument(
   stockId: string,
-  report: AnnualReport,
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  report: AnnualReport
+): Promise<ActionResult> {
+  const parsed = saveEdinetDocumentSchema.safeParse({ stockId, report });
+  if (!parsed.success) {
+    return { success: false, error: '書類情報が不正です' };
+  }
 
-  if (!user) {
+  const context = await getAuthenticatedContext();
+  if (!context) {
     return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
+  const ownership = await findOwnedStock(
+    supabase,
+    user.id,
+    parsed.data.stockId
+  );
+  if (ownership.status === 'error') {
+    return { success: false, error: '銘柄情報の確認に失敗しました' };
+  }
+  if (ownership.status === 'not_found') {
+    return { success: false, error: '対象の銘柄が見つかりません' };
+  }
+  if (
+    !matchesStockCode(ownership.stock.stock_code, parsed.data.report.secCode)
+  ) {
+    return {
+      success: false,
+      error: '書類の証券コードが対象銘柄と一致しません',
+    };
   }
 
   const { error } = await supabase.from('edinet_documents').upsert(
     {
       user_id: user.id,
-      stock_id: stockId,
-      doc_id: report.docID,
-      sec_code: report.secCode,
-      edinet_code: report.edinetCode,
-      filer_name: report.filerName,
+      stock_id: parsed.data.stockId,
+      doc_id: parsed.data.report.docID,
+      sec_code: parsed.data.report.secCode,
+      edinet_code: parsed.data.report.edinetCode,
+      filer_name: parsed.data.report.filerName,
       doc_type_code: '120',
-      doc_description: report.docDescription,
-      file_date: report.submitDateTime?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
-      period_start: report.periodStart,
-      period_end: report.periodEnd,
-      xbrl_flag: report.xbrlFlag ? '1' : '0',
-      csv_flag: report.csvFlag ? '1' : '0',
+      doc_description: parsed.data.report.docDescription,
+      file_date:
+        parsed.data.report.submitDateTime?.slice(0, 10) ??
+        new Date().toISOString().slice(0, 10),
+      period_start: parsed.data.report.periodStart,
+      period_end: parsed.data.report.periodEnd,
+      xbrl_flag: parsed.data.report.xbrlFlag ? '1' : '0',
+      csv_flag: parsed.data.report.csvFlag ? '1' : '0',
       status: 'pending',
     },
-    { onConflict: 'user_id,doc_id' },
+    { onConflict: 'user_id,doc_id' }
   );
 
   if (error) {
     return { success: false, error: '書類情報の保存に失敗しました' };
   }
 
-  revalidateStockPaths(stockId);
+  revalidateStockPaths(parsed.data.stockId);
   return { success: true };
 }
 
@@ -115,14 +159,17 @@ export async function saveEdinetDocument(
  */
 export async function extractFinancialData(
   docID: string,
-  csvFlag: boolean = true,
-): Promise<{ success: boolean; error?: string; data?: ExtractionSummary }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  csvFlag: boolean = true
+): Promise<ActionResult<ExtractionSummary>> {
+  if (
+    !edinetDocumentIdSchema.safeParse(docID).success ||
+    typeof csvFlag !== 'boolean'
+  ) {
+    return { success: false, error: '書類情報が不正です' };
+  }
 
-  if (!user) {
+  const context = await getAuthenticatedContext();
+  if (!context) {
     return { success: false, error: '認証が必要です' };
   }
 
@@ -145,7 +192,8 @@ export async function extractFinancialData(
     const summary = await extractFinancialMetricsFromXbrl(xbrlZip);
     return { success: true, data: summary };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'データ抽出に失敗しました';
+    const message =
+      error instanceof Error ? error.message : 'データ抽出に失敗しました';
     return { success: false, error: message };
   }
 }
@@ -155,19 +203,42 @@ export async function checkExistingFinancialData(
   stockId: string,
   fiscalYear: number,
   fiscalQuarter: string,
-  consolidationType: string,
-): Promise<{ exists: boolean }> {
-  const supabase = await createClient();
-  const { data } = await supabase
+  consolidationType: string
+): Promise<ActionResult<boolean>> {
+  const parsed = existingFinancialDataSchema.safeParse({
+    stockId,
+    fiscalYear,
+    fiscalQuarter,
+    consolidationType,
+  });
+  if (!parsed.success) {
+    return { success: false, error: '検索条件が不正です' };
+  }
+
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
+  const { data, error } = await supabase
     .from('financial_data')
     .select('id')
-    .eq('stock_id', stockId)
-    .eq('fiscal_year', fiscalYear)
-    .eq('fiscal_quarter', fiscalQuarter)
-    .eq('consolidation_type', consolidationType)
+    .eq('stock_id', parsed.data.stockId)
+    .eq('user_id', user.id)
+    .eq('fiscal_year', parsed.data.fiscalYear)
+    .eq('fiscal_quarter', parsed.data.fiscalQuarter)
+    .eq('consolidation_type', parsed.data.consolidationType)
     .maybeSingle();
 
-  return { exists: data != null };
+  if (error) {
+    console.error('checkExistingFinancialData failed:', error);
+    return {
+      success: false,
+      error: '既存の財務データの確認に失敗しました',
+    };
+  }
+  return { success: true, data: data != null };
 }
 
 /**
@@ -180,15 +251,36 @@ export async function saveExtractedData(
   fiscalYear: number,
   docId: string,
   fiscalQuarter: string = 'FY',
-  consolidationType: string = 'consolidated',
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  consolidationType: string = 'consolidated'
+): Promise<ActionResult> {
+  const parsed = saveExtractedDataSchema.safeParse({
+    stockId,
+    extraction,
+    fiscalYear,
+    docId,
+    fiscalQuarter,
+    consolidationType,
+  });
+  if (!parsed.success) {
+    return { success: false, error: '抽出データが不正です' };
+  }
 
-  if (!user) {
+  const context = await getAuthenticatedContext();
+  if (!context) {
     return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
+
+  const ownership = await checkStockOwnership(
+    supabase,
+    user.id,
+    parsed.data.stockId
+  );
+  if (ownership === 'error') {
+    return { success: false, error: '銘柄情報の確認に失敗しました' };
+  }
+  if (ownership === 'not_found') {
+    return { success: false, error: '対象の銘柄が見つかりません' };
   }
 
   const { error } = await supabase.from('financial_data').upsert(
@@ -197,15 +289,18 @@ export async function saveExtractedData(
     // 抽出に欠損があれば DB の NOT NULL 制約でエラーになる（従来どおりの挙動）
     {
       user_id: user.id,
-      stock_id: stockId,
-      fiscal_year: fiscalYear,
-      fiscal_quarter: fiscalQuarter,
-      consolidation_type: consolidationType,
+      stock_id: parsed.data.stockId,
+      fiscal_year: parsed.data.fiscalYear,
+      fiscal_quarter: parsed.data.fiscalQuarter,
+      consolidation_type: parsed.data.consolidationType,
       // MetricKey → カラムの変換は extraction-to-row.ts に一本化されている
-      ...extractionToFinancialColumns(extraction),
+      ...extractionToFinancialColumns(parsed.data.extraction),
       input_unit: 'yen',
     } as TablesInsert<'financial_data'>,
-    { onConflict: 'user_id,stock_id,fiscal_year,fiscal_quarter,consolidation_type' },
+    {
+      onConflict:
+        'user_id,stock_id,fiscal_year,fiscal_quarter,consolidation_type',
+    }
   );
 
   if (error) {
@@ -213,52 +308,81 @@ export async function saveExtractedData(
   }
 
   // FR15: 抽出ログを記録（どの書類から・どの経路で抽出したかの実値を残す）
-  const logEntries = extraction.results.map((r) => ({
+  const logEntries = parsed.data.extraction.results.map((result) => ({
     user_id: user.id,
-    stock_id: stockId,
-    doc_id: docId,
-    fiscal_year: fiscalYear,
-    metric_key: r.metricKey,
-    matched_tag: r.matchedTag,
-    context_id: r.contextId,
-    raw_value: r.value != null ? String(r.value) : null,
-    normalized_value: r.value,
-    confidence: r.confidence,
-    accounting_standard: extraction.accountingStandard,
-    source_type: extraction.sourceType,
+    stock_id: parsed.data.stockId,
+    doc_id: parsed.data.docId,
+    fiscal_year: parsed.data.fiscalYear,
+    metric_key: result.metricKey,
+    matched_tag: result.matchedTag,
+    context_id: result.contextId,
+    raw_value: result.value != null ? String(result.value) : null,
+    normalized_value: result.value,
+    confidence: result.confidence,
+    accounting_standard: parsed.data.extraction.accountingStandard,
+    source_type: parsed.data.extraction.sourceType,
   }));
 
   // 監査ログの書き込み失敗は主データの保存成功を妨げない（方針: console.error + 続行）。
   // ただし FR15 の要件なので、無言で握り潰さずログには必ず残す
-  const { error: logError } = await supabase.from('extraction_logs').insert(logEntries);
+  const { error: logError } = await supabase
+    .from('extraction_logs')
+    .insert(logEntries);
   if (logError) {
     console.error('extraction_logs insert failed:', logError);
   }
 
-  revalidateStockPaths(stockId);
+  revalidateStockPaths(parsed.data.stockId);
   return { success: true };
 }
 
 /**
  * FR16/FR17: 前回の抽出ログと比較してマッピング変更を検出する
  */
+type MappingChange = {
+  metricKey: string;
+  previousTag: string | null;
+  currentTag: string | null;
+};
+
 export async function checkMappingChanges(
   stockId: string,
   fiscalYear: number,
-  currentResults: { metricKey: string; matchedTag: string | null }[],
-): Promise<{ changes: { metricKey: string; previousTag: string | null; currentTag: string | null }[] }> {
-  const supabase = await createClient();
+  currentResults: { metricKey: string; matchedTag: string | null }[]
+): Promise<ActionResult<MappingChange[]>> {
+  const parsed = mappingChangesSchema.safeParse({
+    stockId,
+    fiscalYear,
+    currentResults,
+  });
+  if (!parsed.success) {
+    return { success: false, error: '比較対象の抽出データが不正です' };
+  }
+
+  const context = await getAuthenticatedContext();
+  if (!context) {
+    return { success: false, error: '認証が必要です' };
+  }
+  const { supabase, user } = context;
 
   // 前年度の抽出ログを取得
-  const { data: previousLogs } = await supabase
+  const { data: previousLogs, error } = await supabase
     .from('extraction_logs')
     .select('metric_key, matched_tag')
-    .eq('stock_id', stockId)
-    .eq('fiscal_year', fiscalYear - 1)
+    .eq('stock_id', parsed.data.stockId)
+    .eq('user_id', user.id)
+    .eq('fiscal_year', parsed.data.fiscalYear - 1)
     .order('created_at', { ascending: false });
 
+  if (error) {
+    console.error('checkMappingChanges failed:', error);
+    return {
+      success: false,
+      error: '前年度の抽出ログの取得に失敗しました',
+    };
+  }
   if (!previousLogs || previousLogs.length === 0) {
-    return { changes: [] };
+    return { success: true, data: [] };
   }
 
   // 前回のタグをメトリックキーでグループ化（最新のものを使用）
@@ -270,9 +394,9 @@ export async function checkMappingChanges(
   }
 
   // 変更を検出
-  const changes: { metricKey: string; previousTag: string | null; currentTag: string | null }[] = [];
+  const changes: MappingChange[] = [];
 
-  for (const result of currentResults) {
+  for (const result of parsed.data.currentResults) {
     const prevTag = previousTagMap.get(result.metricKey);
     if (prevTag !== undefined && prevTag !== result.matchedTag) {
       changes.push({
@@ -283,5 +407,5 @@ export async function checkMappingChanges(
     }
   }
 
-  return { changes };
+  return { success: true, data: changes };
 }

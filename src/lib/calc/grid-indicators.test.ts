@@ -55,8 +55,22 @@ describe('0 値の扱い（C-12: truthy 判定による誤排除の防止）', (
   });
 
   it('支払利息 0 は支払利息率 0.0% と算出される', () => {
-    const v: GridValues = { ...empty, interest_expense: 0, interest_bearing_debt: 1_000_000 };
+    const v: GridValues = {
+      ...empty,
+      interest_expense: 0,
+      interest_bearing_debt: 1_000_000,
+    };
     expect(indicator('interest_rate').calc(v, params)).toBe('0.0%');
+  });
+
+  it('現仕様の負債調達コストは支払利息率と同じ値を返す', () => {
+    const v: GridValues = {
+      ...empty,
+      interest_expense: 25_000,
+      interest_bearing_debt: 1_000_000,
+    };
+    expect(indicator('interest_rate').calc(v, params)).toBe('2.5%');
+    expect(indicator('cost_of_debt').calc(v, params)).toBe('2.5%');
   });
 
   it('未入力（null）は従来どおり算出不可', () => {
@@ -81,10 +95,17 @@ describe('理論株価チェーン（C-7: エンジンとの一致）', () => {
       params.tax_rate,
       params.discount_rate,
       params.growth_rate,
-      params.cap_multiplier,
+      params.cap_multiplier
     ).value!;
-    const expected = calcTheoryPrice(bv, v.equity!, v.interest_bearing_debt!, v.shares_outstanding).value!;
-    expect(indicator('theory_price').calc(v, params)).toBe(expected.toLocaleString());
+    const expected = calcTheoryPrice(
+      bv,
+      v.equity!,
+      v.interest_bearing_debt!,
+      v.shares_outstanding
+    ).value!;
+    expect(indicator('theory_price').calc(v, params)).toBe(
+      expected.toLocaleString()
+    );
   });
 
   it('株主資本があれば純資産より優先される（C-9 と同方針）', () => {
@@ -94,10 +115,17 @@ describe('理論株価チェーン（C-7: エンジンとの一致）', () => {
       params.tax_rate,
       params.discount_rate,
       params.growth_rate,
-      params.cap_multiplier,
+      params.cap_multiplier
     ).value!;
-    const expected = calcTheoryPrice(bv, 400_000_000, v.interest_bearing_debt!, v.shares_outstanding).value!;
-    expect(indicator('theory_price').calc(withSE, params)).toBe(expected.toLocaleString());
+    const expected = calcTheoryPrice(
+      bv,
+      400_000_000,
+      v.interest_bearing_debt!,
+      v.shares_outstanding
+    ).value!;
+    expect(indicator('theory_price').calc(withSE, params)).toBe(
+      expected.toLocaleString()
+    );
   });
 });
 

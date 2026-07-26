@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidIsoDate } from '@/lib/utils/date';
 
 /** 取引種別の選択肢（UI のセレクト用） */
 export const TRANSACTION_TYPE_OPTIONS = [
@@ -6,15 +7,17 @@ export const TRANSACTION_TYPE_OPTIONS = [
   { value: 'sell', label: '売り' },
 ] as const;
 
-/** 約定日は妥当な範囲（過去〜未来1年程度）に収める。YYYY-MM-DD 文字列 */
+/** 約定日は YYYY-MM-DD 形式の実在する暦日に制限する。 */
 const tradeDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, '約定日は日付形式で入力してください')
-  .refine((s) => Number.isFinite(Date.parse(`${s}T00:00:00Z`)), '有効な日付を入力してください');
+  .refine(isValidIsoDate, '有効な日付を入力してください');
 
 export const createTransactionSchema = z.object({
   stock_id: z.uuid('銘柄IDが不正です'),
-  transaction_type: z.enum(['buy', 'sell'], { error: '取引種別を選択してください' }),
+  transaction_type: z.enum(['buy', 'sell'], {
+    error: '取引種別を選択してください',
+  }),
   trade_date: tradeDateSchema,
   quantity: z
     .number({ error: '株数を入力してください' })

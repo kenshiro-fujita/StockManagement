@@ -16,5 +16,11 @@ export function FinancialDataSection({
   financialData: FullFinancialDataRow[];
   parameters?: ParametersRow | null;
 }) {
-  return <FinancialDataGrid stockId={stockId} financialData={financialData} parameters={parameters ?? null} />;
+  return (
+    <FinancialDataGrid
+      stockId={stockId}
+      financialData={financialData}
+      parameters={parameters ?? null}
+    />
+  );
 }

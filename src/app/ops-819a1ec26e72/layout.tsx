@@ -33,22 +33,34 @@ export default function AdminLayout({
     <div className="min-h-screen bg-background">
       {/* 管理画面ヘッダー */}
       <header className="border-b bg-zinc-900 text-white">
-        <div className="mx-auto max-w-6xl flex items-center justify-between px-6 py-3">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <Shield className="h-5 w-5 text-amber-400" />
             <span className="font-bold">管理画面</span>
           </div>
           <nav className="flex items-center gap-4 text-sm">
-            <Link href="/ops-819a1ec26e72" className="hover:text-amber-300 transition-colors">
+            <Link
+              href="/ops-819a1ec26e72"
+              className="transition-colors hover:text-amber-300"
+            >
               ダッシュボード
             </Link>
-            <Link href="/ops-819a1ec26e72/master" className="hover:text-amber-300 transition-colors">
+            <Link
+              href="/ops-819a1ec26e72/master"
+              className="transition-colors hover:text-amber-300"
+            >
               マスタ管理
             </Link>
-            <Link href="/ops-819a1ec26e72/batch" className="hover:text-amber-300 transition-colors">
+            <Link
+              href="/ops-819a1ec26e72/batch"
+              className="transition-colors hover:text-amber-300"
+            >
               バッチ取得
             </Link>
-            <Link href="/" className="text-zinc-400 hover:text-white transition-colors">
+            <Link
+              href="/"
+              className="text-zinc-400 transition-colors hover:text-white"
+            >
               ← モード選択に戻る
             </Link>
           </nav>

@@ -1,8 +1,16 @@
-export type ParametersRow = {
-  id: string;
-  stock_id: string;
-  discount_rate: number;
-  growth_rate: number;
-  tax_rate: number;
-  cap_multiplier: number;
-};
+/**
+ * 理論株価計算に必要な銘柄別パラメータです。
+ *
+ * DB型から導出して、マイグレーションとアプリ型の乖離を防ぎます。
+ */
+import type { Tables } from '@/lib/types/database';
+
+export type ParametersRow = Pick<
+  Tables<'parameters'>,
+  | 'id'
+  | 'stock_id'
+  | 'discount_rate'
+  | 'growth_rate'
+  | 'tax_rate'
+  | 'cap_multiplier'
+>;

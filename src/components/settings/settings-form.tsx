@@ -11,7 +11,11 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { saveSetting } from '@/actions/settings';
-import { updateDisplayName, updatePassword, updateEmail } from '@/actions/user-profile';
+import {
+  updateDisplayName,
+  updatePassword,
+  updateEmail,
+} from '@/actions/user-profile';
 
 function ApiKeyField({
   label,
@@ -32,13 +36,18 @@ function ApiKeyField({
 
   const handleSave = async () => {
     setIsSaving(true);
-    const result = await saveSetting(settingKey, value);
-    setIsSaving(false);
-
-    if (result.success) {
-      toast.success(`${label} を保存しました`);
-    } else {
-      toast.error(result.error ?? '保存に失敗しました');
+    try {
+      const result = await saveSetting(settingKey, value);
+      if (result.success) {
+        toast.success(`${label} を保存しました`);
+      } else {
+        toast.error(result.error ?? '保存に失敗しました');
+      }
+    } catch {
+      // Server Action 自体が失敗しても、機密情報を表示せず再試行可能な状態へ戻す。
+      toast.error('保存に失敗しました');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -50,7 +59,9 @@ function ApiKeyField({
 
   return (
     <div className="space-y-2">
-      <label htmlFor={inputId} className="text-sm font-medium">{label}</label>
+      <label htmlFor={inputId} className="text-sm font-medium">
+        {label}
+      </label>
       <p className="text-xs text-muted-foreground">{description}</p>
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -68,7 +79,11 @@ function ApiKeyField({
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             aria-label={isVisible ? 'APIキーを隠す' : 'APIキーを表示'}
           >
-            {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {isVisible ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
           </button>
         </div>
         <Button onClick={handleSave} disabled={isSaving} size="sm">
@@ -85,21 +100,27 @@ function PasswordChangeSection() {
 
   const handleChangePassword = async () => {
     setIsChanging(true);
-    const result = await updatePassword(newPassword);
-    setIsChanging(false);
-
-    if (result.success) {
-      toast.success('パスワードを変更しました');
-      setNewPassword('');
-    } else {
-      toast.error(result.error ?? 'パスワードの変更に失敗しました');
+    try {
+      const result = await updatePassword(newPassword);
+      if (result.success) {
+        toast.success('パスワードを変更しました');
+        setNewPassword('');
+      } else {
+        toast.error(result.error ?? 'パスワードの変更に失敗しました');
+      }
+    } catch {
+      toast.error('パスワードの変更に失敗しました');
+    } finally {
+      setIsChanging(false);
     }
   };
 
   return (
     <div className="space-y-3">
       <div>
-        <label htmlFor="new-password" className="text-sm font-medium">新しいパスワード</label>
+        <label htmlFor="new-password" className="text-sm font-medium">
+          新しいパスワード
+        </label>
         <Input
           id="new-password"
           type="password"
@@ -133,47 +154,83 @@ function UserProfileSection({
 
   const handleSaveName = async () => {
     setIsSavingName(true);
-    const result = await updateDisplayName(name);
-    setIsSavingName(false);
-    if (result.success) {
-      toast.success('表示名を更新しました');
-    } else {
-      toast.error(result.error ?? '表示名の更新に失敗しました');
+    try {
+      const result = await updateDisplayName(name);
+      if (result.success) {
+        toast.success('表示名を更新しました');
+      } else {
+        toast.error(result.error ?? '表示名の更新に失敗しました');
+      }
+    } catch {
+      toast.error('表示名の更新に失敗しました');
+    } finally {
+      setIsSavingName(false);
     }
   };
 
   const handleSaveEmail = async () => {
     setIsSavingEmail(true);
-    const result = await updateEmail(newEmail);
-    setIsSavingEmail(false);
-    if (result.success) {
-      toast.success('メールアドレスを変更しました');
-    } else {
-      toast.error(result.error ?? 'メールアドレスの変更に失敗しました');
+    try {
+      const result = await updateEmail(newEmail);
+      if (result.success) {
+        toast.success('メールアドレスを変更しました');
+      } else {
+        toast.error(result.error ?? 'メールアドレスの変更に失敗しました');
+      }
+    } catch {
+      toast.error('メールアドレスの変更に失敗しました');
+    } finally {
+      setIsSavingEmail(false);
     }
   };
 
   return (
     <div className="space-y-4">
       <div>
-        <label htmlFor="profile-user-id" className="text-sm font-medium">ユーザーID</label>
-        <Input id="profile-user-id" value={userId} disabled className="mt-1 font-mono text-xs opacity-60" />
-        <p className="text-xs text-muted-foreground mt-1">変更できません</p>
+        <label htmlFor="profile-user-id" className="text-sm font-medium">
+          ユーザーID
+        </label>
+        <Input
+          id="profile-user-id"
+          value={userId}
+          disabled
+          className="mt-1 font-mono text-xs opacity-60"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">変更できません</p>
       </div>
       <div>
-        <label htmlFor="profile-display-name" className="text-sm font-medium">表示名</label>
-        <div className="flex gap-2 mt-1">
-          <Input id="profile-display-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="表示名を入力" />
+        <label htmlFor="profile-display-name" className="text-sm font-medium">
+          表示名
+        </label>
+        <div className="mt-1 flex gap-2">
+          <Input
+            id="profile-display-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="表示名を入力"
+          />
           <Button onClick={handleSaveName} disabled={isSavingName} size="sm">
             {isSavingName ? '保存中...' : '保存'}
           </Button>
         </div>
       </div>
       <div>
-        <label htmlFor="profile-email" className="text-sm font-medium">メールアドレス</label>
-        <div className="flex gap-2 mt-1">
-          <Input id="profile-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
-          <Button onClick={handleSaveEmail} disabled={isSavingEmail || newEmail === email} size="sm" variant="outline">
+        <label htmlFor="profile-email" className="text-sm font-medium">
+          メールアドレス
+        </label>
+        <div className="mt-1 flex gap-2">
+          <Input
+            id="profile-email"
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+          />
+          <Button
+            onClick={handleSaveEmail}
+            disabled={isSavingEmail || newEmail === email}
+            size="sm"
+            variant="outline"
+          >
             {isSavingEmail ? '送信中...' : '変更'}
           </Button>
         </div>
@@ -202,7 +259,11 @@ export function SettingsForm({
           <h2 className="text-lg font-semibold">ユーザー情報</h2>
         </div>
         <div className="rounded-lg border p-4">
-          <UserProfileSection userId={userId} email={email} displayName={displayName} />
+          <UserProfileSection
+            userId={userId}
+            email={email}
+            displayName={displayName}
+          />
         </div>
       </section>
 

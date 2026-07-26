@@ -33,11 +33,7 @@ import {
 import type { RosterCategory } from '@/lib/types/roster';
 import { updateRosterCategory } from '@/actions/roster';
 
-export function RosterBadge({
-  category,
-}: {
-  category: RosterCategory | null;
-}) {
+export function RosterBadge({ category }: { category: RosterCategory | null }) {
   if (!category) {
     return (
       <Badge variant="outline" className="text-muted-foreground">
@@ -76,29 +72,31 @@ export function RosterSection({
 
   const handleSubmit = async (data: UpdateRosterInput) => {
     setIsPending(true);
-    const result = await updateRosterCategory(data);
-    setIsPending(false);
-
-    if (result.success) {
-      toast.success('ロースター分類を更新しました');
-      setIsEditing(false);
-      form.reset({ stock_id: stockId, category: undefined, reason: '' });
-    } else {
-      toast.error(result.error ?? '更新に失敗しました');
+    try {
+      const result = await updateRosterCategory(data);
+      if (result.success) {
+        toast.success('ロースター分類を更新しました');
+        setIsEditing(false);
+        form.reset({ stock_id: stockId, category: undefined, reason: '' });
+      } else {
+        toast.error(result.error ?? '更新に失敗しました');
+      }
+    } catch {
+      toast.error('更新に失敗しました');
+    } finally {
+      setIsPending(false);
     }
   };
 
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground">ロースター</span>
+        <span className="text-sm font-medium text-muted-foreground">
+          ロースター
+        </span>
         <RosterBadge category={currentCategory} />
         {!isEditing && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsEditing(true)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>
             変更
           </Button>
         )}
@@ -116,10 +114,7 @@ export function RosterSection({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>新しいカテゴリ</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="カテゴリを選択" />

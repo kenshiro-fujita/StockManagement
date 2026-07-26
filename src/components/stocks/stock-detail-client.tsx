@@ -37,15 +37,16 @@ export function StockDetailClient({
   stockId: string;
   stockCode: string;
   financialData: FullFinancialDataRow[];
-  initialParameters: ParametersRow | null;
+  initialParameters: ParametersRow;
   transactions: TransactionRow[];
   overviewContent: React.ReactNode;
 }) {
-  const [parameters, setParameters] = useState<ParametersRow | null>(initialParameters);
+  const [parameters, setParameters] =
+    useState<ParametersRow>(initialParameters);
   const [prevResults, setPrevResults] = useState<IndicatorResults | null>(null);
 
   const indicatorResults = useMemo<IndicatorResults | null>(() => {
-    if (financialData.length === 0 || parameters == null) return null;
+    if (financialData.length === 0) return null;
     try {
       return calculateAllIndicators(financialData, parameters);
     } catch {
@@ -53,15 +54,16 @@ export function StockDetailClient({
     }
   }, [financialData, parameters]);
 
-  const handleParametersChange = useCallback((newParams: ParametersRow) => {
-    // 現在の結果を「前回の結果」として保存（ハイライト用）
-    setPrevResults(indicatorResults);
-    setParameters(newParams);
-  }, [indicatorResults]);
+  const handleParametersChange = useCallback(
+    (newParams: ParametersRow) => {
+      // 現在の結果を「前回の結果」として保存（ハイライト用）
+      setPrevResults(indicatorResults);
+      setParameters(newParams);
+    },
+    [indicatorResults]
+  );
 
-  const latestStockPrice = financialData.length > 0
-    ? financialData[0].current_stock_price
-    : null;
+  const latestStockPrice = financialData[0]?.current_stock_price ?? null;
 
   return (
     <StockDetailTabs
@@ -95,12 +97,8 @@ export function StockDetailClient({
           onParametersChange={handleParametersChange}
         />
       }
-      edinetContent={
-        <EdinetSearch stockId={stockId} stockCode={stockCode} />
-      }
-      aiResearchContent={
-        <AIResearchSection stockId={stockId} />
-      }
+      edinetContent={<EdinetSearch stockId={stockId} stockCode={stockCode} />}
+      aiResearchContent={<AIResearchSection stockId={stockId} />}
     />
   );
 }

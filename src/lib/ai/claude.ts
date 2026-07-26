@@ -10,7 +10,11 @@
  * - 構造化された4セクションで回答を返させる
  */
 import Anthropic from '@anthropic-ai/sdk';
-import type { AIProvider, AIResearchRequest, AIResearchResponse } from './provider';
+import type {
+  AIProvider,
+  AIResearchRequest,
+  AIResearchResponse,
+} from './provider';
 import { AIProviderError } from './errors';
 
 /** Claude に送るシステムプロンプト */
@@ -38,23 +42,35 @@ function buildUserPrompt(req: AIResearchRequest): string {
   lines.push(
     ``,
     `上記4セクション（[事業概要]、[競合環境]、[強みとリスク]、[直近の動向]）に分けて回答してください。`,
-    `各セクションは200〜400文字程度でお願いします。`,
+    `各セクションは200〜400文字程度でお願いします。`
   );
   return lines.join('\n');
 }
 
 /** Claude のレスポンスを4セクションにパースする */
-function parseResponse(text: string): Omit<AIResearchResponse, 'model' | 'researchedAt'> {
-  const sections: Record<string, string> = {};
-  const sectionNames = ['事業概要', '競合環境', '強みとリスク', '直近の動向'];
+function parseResponse(
+  text: string
+): Omit<AIResearchResponse, 'model' | 'researchedAt'> {
+  const sectionNames = [
+    '事業概要',
+    '競合環境',
+    '強みとリスク',
+    '直近の動向',
+  ] as const;
+  const sections: Record<(typeof sectionNames)[number], string> = {
+    事業概要: '',
+    競合環境: '',
+    強みとリスク: '',
+    直近の動向: '',
+  };
 
   for (const name of sectionNames) {
     // [セクション名] または ## セクション名 のパターンに対応
     const pattern = new RegExp(
-      `(?:\\[${name}\\]|##\\s*${name})\\s*\\n([\\s\\S]*?)(?=\\[(?:${sectionNames.join('|')})\\]|##\\s*(?:${sectionNames.join('|')})|$)`,
+      `(?:\\[${name}\\]|##\\s*${name})\\s*\\n([\\s\\S]*?)(?=\\[(?:${sectionNames.join('|')})\\]|##\\s*(?:${sectionNames.join('|')})|$)`
     );
     const match = text.match(pattern);
-    sections[name] = match ? match[1].trim() : '';
+    sections[name] = match?.[1]?.trim() ?? '';
   }
 
   // パースに失敗した場合は全文を事業概要に入れる
@@ -103,18 +119,26 @@ export class ClaudeProvider implements AIProvider {
       return new AIProviderError('auth', 'APIキーが無効です', { cause: error });
     }
     if (error instanceof Anthropic.RateLimitError) {
-      return new AIProviderError('rate_limit', 'レート制限に達しました', { cause: error });
+      return new AIProviderError('rate_limit', 'レート制限に達しました', {
+        cause: error,
+      });
     }
     // クレジット不足は専用の例外クラスがなく 400 で返るため、ここだけ文言で判定する
     if (
       error instanceof Anthropic.APIError &&
       String(error.message).includes('credit balance is too low')
     ) {
-      return new AIProviderError('insufficient_credit', 'クレジット残高が不足しています', {
-        cause: error,
-      });
+      return new AIProviderError(
+        'insufficient_credit',
+        'クレジット残高が不足しています',
+        {
+          cause: error,
+        }
+      );
     }
-    return new AIProviderError('unknown', 'AI調査に失敗しました', { cause: error });
+    return new AIProviderError('unknown', 'AI調査に失敗しました', {
+      cause: error,
+    });
   }
 
   async research(request: AIResearchRequest): Promise<AIResearchResponse> {
@@ -124,9 +148,7 @@ export class ClaudeProvider implements AIProvider {
         model: this.model,
         max_tokens: 2048,
         system: SYSTEM_PROMPT,
-        messages: [
-          { role: 'user', content: buildUserPrompt(request) },
-        ],
+        messages: [{ role: 'user', content: buildUserPrompt(request) }],
       });
     } catch (error) {
       throw this.normalizeError(error);

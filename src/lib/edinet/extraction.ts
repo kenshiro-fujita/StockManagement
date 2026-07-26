@@ -17,10 +17,16 @@
 import {
   METRIC_TAGS,
   METRIC_LABELS,
+  METRIC_KEYS,
   AGGREGATE_METRICS,
+  detectAccountingStandard,
   type AccountingStandard,
   type MetricKey,
+  type MetricTagCandidates,
 } from './taxonomy';
+
+// 既存の import 経路を維持しつつ、定義元は taxonomy.ts に一本化する。
+export { METRIC_KEYS } from './taxonomy';
 
 /**
  * パーサー非依存の正規化済み Fact
@@ -49,8 +55,14 @@ export type ExtractionResult = {
   value: number | null;
   matchedTag: string | null;
   contextId: string | null;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: ExtractionConfidence;
 };
+
+/** 抽出値の採用根拠を画面・ログへ伝える信頼度。 */
+export type ExtractionConfidence = 'high' | 'medium' | 'low';
+
+/** EDINET 書類をどちらの提供形式から解析したかを記録する。 */
+export type ExtractionSourceType = 'csv' | 'xbrl';
 
 /**
  * 1つの有価証券報告書からの全抽出結果
@@ -62,53 +74,55 @@ export type ExtractionResult = {
 export type ExtractionSummary = {
   accountingStandard: AccountingStandard;
   periodEnd: string | null;
-  sourceType: 'csv' | 'xbrl';
+  sourceType: ExtractionSourceType;
   results: ExtractionResult[];
 };
 
-/** 抽出対象の全メトリック（financial_data のカラムに対応） */
-export const METRIC_KEYS: MetricKey[] = [
-  'revenue',
-  'operating_profit',
-  'net_income_parent',
-  'total_assets',
-  'equity',
-  'operating_cf',
-  'investing_cf',
+/** ラベルを MetricKey から必ず解決し、抽出経路ごとの表記ずれを防ぐ。 */
+function createExtractionResult(
+  metricKey: MetricKey,
+  details: Omit<ExtractionResult, 'metricKey' | 'label'>
+): ExtractionResult {
+  return {
+    metricKey,
+    label: METRIC_LABELS[metricKey],
+    ...details,
+  };
+}
+
+/** 連結/単体を問わないメトリック（企業全体で1つの値しかない） */
+const CONSOLIDATION_AGNOSTIC_METRICS: ReadonlySet<MetricKey> = new Set([
   'issued_shares',
   'eps_basic',
-  'interest_bearing_debt',
-  'interest_expense',
+]);
+
+/**
+ * B/S（貸借対照表）項目: Instant（時点）コンテキストで検索する
+ * B/S は「ある時点」の残高なので Instant、P/L・CF は「期間」の累計なので Duration
+ */
+const BS_METRICS: ReadonlySet<MetricKey> = new Set([
+  'total_assets',
+  'equity',
   'cash_and_equivalents',
   'current_assets',
   'investments_and_other_assets',
   'current_liabilities',
   'non_current_liabilities',
   'shareholders_equity',
-];
-
-/** 連結/単体を問わないメトリック（企業全体で1つの値しかない） */
-const CONSOLIDATION_AGNOSTIC_METRICS: MetricKey[] = ['issued_shares', 'eps_basic'];
-
-/**
- * B/S（貸借対照表）項目: Instant（時点）コンテキストで検索する
- * B/S は「ある時点」の残高なので Instant、P/L・CF は「期間」の累計なので Duration
- */
-const BS_METRICS: MetricKey[] = [
-  'total_assets', 'equity', 'cash_and_equivalents', 'current_assets',
-  'investments_and_other_assets', 'current_liabilities', 'non_current_liabilities',
-  'shareholders_equity',
   // 有利子負債の構成要素（借入金・社債・リース債務）も B/S 残高
   'interest_bearing_debt',
-];
+]);
+
+/** 合算対象かを毎回配列走査せず判定し、メトリック追加時の意図も明示する。 */
+const AGGREGATE_METRIC_SET: ReadonlySet<MetricKey> = new Set(AGGREGATE_METRICS);
 
 /** メトリックのコンテキスト種別 */
 type ContextKind = { bs: boolean; agnostic: boolean };
 
 function kindOf(metricKey: MetricKey): ContextKind {
   return {
-    bs: BS_METRICS.includes(metricKey),
-    agnostic: CONSOLIDATION_AGNOSTIC_METRICS.includes(metricKey),
+    bs: BS_METRICS.has(metricKey),
+    agnostic: CONSOLIDATION_AGNOSTIC_METRICS.has(metricKey),
   };
 }
 
@@ -140,58 +154,85 @@ function matchesLoose(contextId: string, kind: ContextKind): boolean {
   return true;
 }
 
+/** タグ名ごとに Fact を一度だけ索引化し、各メトリックの全件再走査を避ける。 */
+type FactIndex = ReadonlyMap<string, readonly NormalizedFact[]>;
+
+function createFactIndex(facts: readonly NormalizedFact[]): FactIndex {
+  const index = new Map<string, NormalizedFact[]>();
+
+  for (const fact of facts) {
+    const indexedFacts = index.get(fact.localName);
+    if (indexedFacts) {
+      indexedFacts.push(fact);
+    } else {
+      index.set(fact.localName, [fact]);
+    }
+  }
+
+  return index;
+}
+
+/** 候補タグの優先順位を保ったまま、条件に合う最初の Fact を返す。 */
+function findCandidateFact(
+  index: FactIndex,
+  candidates: readonly string[],
+  matchesContext: (contextId: string) => boolean
+): { fact: NormalizedFact; tag: string } | null {
+  for (const tag of candidates) {
+    const fact = index
+      .get(tag)
+      ?.find(
+        (candidate) =>
+          candidate.value != null && matchesContext(candidate.contextId)
+      );
+    if (fact) return { fact, tag };
+  }
+
+  return null;
+}
+
 /**
  * 通常メトリックの抽出（プレーン優先の2パス検索）
  */
 function extractSimpleMetric(
-  facts: NormalizedFact[],
+  index: FactIndex,
   metricKey: MetricKey,
-  candidates: string[],
+  candidates: readonly string[]
 ): ExtractionResult {
   const kind = kindOf(metricKey);
 
   // パス1: プレーンコンテキスト完全一致（セグメント値の混入なし）
-  for (const tag of candidates) {
-    const fact = facts.find(
-      (f) => f.localName === tag && f.value != null && isPlainContext(f.contextId, kind),
-    );
-    if (fact) {
-      return {
-        metricKey,
-        label: METRIC_LABELS[metricKey],
-        value: fact.value,
-        matchedTag: tag,
-        contextId: fact.contextId,
-        confidence: 'high',
-      };
-    }
+  const plainMatch = findCandidateFact(index, candidates, (contextId) =>
+    isPlainContext(contextId, kind)
+  );
+  if (plainMatch) {
+    return createExtractionResult(metricKey, {
+      value: plainMatch.fact.value,
+      matchedTag: plainMatch.tag,
+      contextId: plainMatch.fact.contextId,
+      confidence: 'high',
+    });
   }
 
   // パス2: 緩い一致。Member 付き（セグメント等）の可能性があるため medium に降格
-  for (const tag of candidates) {
-    const fact = facts.find(
-      (f) => f.localName === tag && f.value != null && matchesLoose(f.contextId, kind),
-    );
-    if (fact) {
-      return {
-        metricKey,
-        label: METRIC_LABELS[metricKey],
-        value: fact.value,
-        matchedTag: tag,
-        contextId: fact.contextId,
-        confidence: 'medium',
-      };
-    }
+  const looseMatch = findCandidateFact(index, candidates, (contextId) =>
+    matchesLoose(contextId, kind)
+  );
+  if (looseMatch) {
+    return createExtractionResult(metricKey, {
+      value: looseMatch.fact.value,
+      matchedTag: looseMatch.tag,
+      contextId: looseMatch.fact.contextId,
+      confidence: 'medium',
+    });
   }
 
-  return {
-    metricKey,
-    label: METRIC_LABELS[metricKey],
+  return createExtractionResult(metricKey, {
     value: null,
     matchedTag: null,
     contextId: null,
     confidence: 'low',
-  };
+  });
 }
 
 /**
@@ -200,9 +241,9 @@ function extractSimpleMetric(
  * （同一タグの Member 重複を合算すると二重計上になるため）
  */
 function extractAggregateMetric(
-  facts: NormalizedFact[],
+  index: FactIndex,
   metricKey: MetricKey,
-  candidates: string[],
+  candidates: readonly string[]
 ): ExtractionResult {
   const kind = kindOf(metricKey);
   let total = 0;
@@ -210,10 +251,16 @@ function extractAggregateMetric(
   const matchedTags: string[] = [];
 
   for (const tag of candidates) {
-    const tagFacts = facts.filter((f) => f.localName === tag && f.value != null);
+    const tagFacts = index.get(tag) ?? [];
     const fact =
-      tagFacts.find((f) => isPlainContext(f.contextId, kind)) ??
-      tagFacts.find((f) => matchesLoose(f.contextId, kind));
+      tagFacts.find(
+        (candidate) =>
+          candidate.value != null && isPlainContext(candidate.contextId, kind)
+      ) ??
+      tagFacts.find(
+        (candidate) =>
+          candidate.value != null && matchesLoose(candidate.contextId, kind)
+      );
     if (fact && fact.value != null) {
       total += fact.value;
       found = true;
@@ -221,36 +268,45 @@ function extractAggregateMetric(
     }
   }
 
-  return {
-    metricKey,
-    label: METRIC_LABELS[metricKey],
+  return createExtractionResult(metricKey, {
     value: found ? total : null,
     matchedTag: matchedTags.length > 0 ? matchedTags.join('+') : null,
     contextId: null,
     confidence: found ? 'medium' : 'low',
-  };
+  });
 }
 
-/** メトリック抽出のディスパッチャー: 合算 or 通常を判定して委譲する */
-export function extractMetric(
-  facts: NormalizedFact[],
+/** 索引化済み Fact から、合算または通常の抽出処理へ振り分ける。 */
+function extractMetricFromIndex(
+  index: FactIndex,
   metricKey: MetricKey,
-  standard: AccountingStandard,
+  standard: AccountingStandard
 ): ExtractionResult {
-  const candidates = METRIC_TAGS[metricKey][standard] ?? METRIC_TAGS[metricKey].JGAAP ?? [];
+  const tagCandidates: MetricTagCandidates = METRIC_TAGS[metricKey];
+  const candidates = tagCandidates[standard] ?? tagCandidates.JGAAP ?? [];
 
-  if (AGGREGATE_METRICS.includes(metricKey)) {
-    return extractAggregateMetric(facts, metricKey, candidates);
+  if (AGGREGATE_METRIC_SET.has(metricKey)) {
+    return extractAggregateMetric(index, metricKey, candidates);
   }
-  return extractSimpleMetric(facts, metricKey, candidates);
+  return extractSimpleMetric(index, metricKey, candidates);
 }
 
-/** 全メトリックを一括抽出する */
+/** メトリック抽出の公開境界。単一メトリックでも同じ索引ロジックを使用する。 */
+export function extractMetric(
+  facts: readonly NormalizedFact[],
+  metricKey: MetricKey,
+  standard: AccountingStandard
+): ExtractionResult {
+  return extractMetricFromIndex(createFactIndex(facts), metricKey, standard);
+}
+
+/** 全メトリックを一括抽出し、Fact の索引は一度だけ生成する。 */
 export function extractAllMetrics(
-  facts: NormalizedFact[],
-  standard: AccountingStandard,
+  facts: readonly NormalizedFact[],
+  standard: AccountingStandard
 ): ExtractionResult[] {
-  return METRIC_KEYS.map((key) => extractMetric(facts, key, standard));
+  const index = createFactIndex(facts);
+  return METRIC_KEYS.map((key) => extractMetricFromIndex(index, key, standard));
 }
 
 /**
@@ -258,10 +314,32 @@ export function extractAllMetrics(
  * value（数値化済み）ではなく rawValue を返すのがポイント
  */
 export function findDeiRawValue(
-  facts: NormalizedFact[],
-  localName: string,
+  facts: readonly NormalizedFact[],
+  localName: string
 ): string | null {
   const fact = facts.find((f) => f.localName === localName);
   const raw = fact?.rawValue?.trim();
   return raw ? raw : null;
+}
+
+/**
+ * パーサーが生成した Fact を、CSV/XBRL 共通の抽出結果へまとめる。
+ *
+ * 会計基準・決算期・メトリック選択を同じ経路へ通すことで、入力形式による
+ * 判定差を作らず、sourceType だけを実際の取得経路として記録する。
+ */
+export function createExtractionSummary(
+  facts: readonly NormalizedFact[],
+  sourceType: ExtractionSourceType
+): ExtractionSummary {
+  const standard = detectAccountingStandard(
+    findDeiRawValue(facts, 'AccountingStandardsDEI')
+  );
+
+  return {
+    accountingStandard: standard,
+    periodEnd: findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI'),
+    sourceType,
+    results: extractAllMetrics(facts, standard),
+  };
 }

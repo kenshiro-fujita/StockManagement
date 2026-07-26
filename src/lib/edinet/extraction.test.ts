@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   extractMetric,
   extractAllMetrics,
+  createExtractionSummary,
   findDeiRawValue,
   type NormalizedFact,
 } from './extraction';
@@ -18,7 +19,7 @@ function fact(
   localName: string,
   contextId: string,
   value: number | null,
-  rawValue?: string,
+  rawValue?: string
 ): NormalizedFact {
   return {
     localName,
@@ -53,6 +54,17 @@ describe('プレーンコンテキスト優先（C-4: セグメント値混入�
     expect(result.confidence).toBe('medium');
   });
 
+  it('高優先タグの Member 値より、低優先タグのプレーン全社値を優先する', () => {
+    const facts = [
+      fact('NetSales', 'CurrentYearDuration_ReportableSegmentsMember', 300),
+      fact('Revenues', 'CurrentYearDuration', 1000),
+    ];
+    const result = extractMetric(facts, 'revenue', 'JGAAP');
+    expect(result.value).toBe(1000);
+    expect(result.matchedTag).toBe('Revenues');
+    expect(result.confidence).toBe('high');
+  });
+
   it('単体（NonConsolidatedMember）は連結指標として採用しない', () => {
     const facts = [
       fact('NetSales', 'CurrentYearDuration_NonConsolidatedMember', 500),
@@ -74,7 +86,11 @@ describe('プレーンコンテキスト優先（C-4: セグメント値混入�
 
   it('発行済株式数（連結/単体不問）は単体プレーンも許可する', () => {
     const facts = [
-      fact('TotalNumberOfIssuedSharesSummaryOfBusinessResults', 'CurrentYearInstant_NonConsolidatedMember', 1_000_000),
+      fact(
+        'TotalNumberOfIssuedSharesSummaryOfBusinessResults',
+        'CurrentYearInstant_NonConsolidatedMember',
+        1_000_000
+      ),
     ];
     const result = extractMetric(facts, 'issued_shares', 'JGAAP');
     expect(result.value).toBe(1_000_000);
@@ -105,11 +121,40 @@ describe('DEI 文字列ファクト（C-2: 生値の保持）', () => {
     const facts = [
       // "IFRS" は normalizeNumber で null になるが rawValue には残る
       fact('AccountingStandardsDEI', 'FilingDateInstant', null, 'IFRS'),
-      fact('CurrentFiscalYearEndDateDEI', 'FilingDateInstant', null, '2025-03-31'),
+      fact(
+        'CurrentFiscalYearEndDateDEI',
+        'FilingDateInstant',
+        null,
+        '2025-03-31'
+      ),
     ];
     expect(findDeiRawValue(facts, 'AccountingStandardsDEI')).toBe('IFRS');
-    expect(findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI')).toBe('2025-03-31');
+    expect(findDeiRawValue(facts, 'CurrentFiscalYearEndDateDEI')).toBe(
+      '2025-03-31'
+    );
     expect(findDeiRawValue(facts, 'NonexistentDEI')).toBeNull();
+  });
+
+  it('CSV/XBRL 共通の要約境界で会計基準・決算期・取得経路を保持する', () => {
+    const facts = [
+      fact('AccountingStandardsDEI', 'FilingDateInstant', null, 'IFRS'),
+      fact(
+        'CurrentFiscalYearEndDateDEI',
+        'FilingDateInstant',
+        null,
+        '2025-03-31'
+      ),
+      fact('RevenueIFRS', 'CurrentYearDuration', 2_000_000),
+    ];
+
+    const summary = createExtractionSummary(facts, 'xbrl');
+
+    expect(summary.accountingStandard).toBe('IFRS');
+    expect(summary.periodEnd).toBe('2025-03-31');
+    expect(summary.sourceType).toBe('xbrl');
+    expect(
+      summary.results.find((result) => result.metricKey === 'revenue')?.value
+    ).toBe(2_000_000);
   });
 });
 
@@ -130,7 +175,11 @@ describe('IFRS タグの抽出（C-1: IFRS サフィックス付き要素名）'
 
   it('JGAAP の営業CFは NetCashProvidedByUsedInOperatingActivities で取得できる', () => {
     const facts = [
-      fact('NetCashProvidedByUsedInOperatingActivities', 'CurrentYearDuration', 12_345),
+      fact(
+        'NetCashProvidedByUsedInOperatingActivities',
+        'CurrentYearDuration',
+        12_345
+      ),
     ];
     const result = extractMetric(facts, 'operating_cf', 'JGAAP');
     expect(result.value).toBe(12_345);

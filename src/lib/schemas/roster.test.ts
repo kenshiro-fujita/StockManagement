@@ -108,12 +108,18 @@ describe('updateBuyPrioritySchema', () => {
   });
 
   it('nullを受け付ける（未設定）', () => {
-    const result = updateBuyPrioritySchema.safeParse({ ...validInput, buy_priority: null });
+    const result = updateBuyPrioritySchema.safeParse({
+      ...validInput,
+      buy_priority: null,
+    });
     expect(result.success).toBe(true);
   });
 
   it('0を拒否する', () => {
-    const result = updateBuyPrioritySchema.safeParse({ ...validInput, buy_priority: 0 });
+    const result = updateBuyPrioritySchema.safeParse({
+      ...validInput,
+      buy_priority: 0,
+    });
     expect(result.success).toBe(false);
   });
 });

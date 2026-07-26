@@ -18,27 +18,8 @@
 /** 日本の上場企業が採用する3つの会計基準 */
 export type AccountingStandard = 'JGAAP' | 'IFRS' | 'USGAAP';
 
-/** 抽出対象の財務指標キー（financial_data テーブルのカラムに対応） */
-export type MetricKey =
-  | 'revenue'
-  | 'operating_profit'
-  | 'net_income_parent'
-  | 'total_assets'
-  | 'equity'
-  | 'operating_cf'
-  | 'investing_cf'
-  | 'issued_shares'
-  | 'eps_basic'
-  | 'interest_bearing_debt'
-  | 'interest_expense'
-  | 'cash_and_equivalents'
-  | 'current_assets'
-  | 'investments_and_other_assets'
-  | 'current_liabilities'
-  | 'non_current_liabilities'
-  | 'shareholders_equity';
-
-export const METRIC_LABELS: Record<MetricKey, string> = {
+/** 抽出対象と表示名の単一の真実の源。キーはこの定義から導出する。 */
+export const METRIC_LABELS = {
   revenue: '売上高',
   operating_profit: '営業利益',
   net_income_parent: '当期純利益（親会社帰属）',
@@ -56,81 +37,191 @@ export const METRIC_LABELS: Record<MetricKey, string> = {
   current_liabilities: '流動負債',
   non_current_liabilities: '固定負債',
   shareholders_equity: '株主資本',
-};
+} as const;
+
+/** 抽出対象の財務指標キー（financial_data テーブルのカラムに対応） */
+export type MetricKey = keyof typeof METRIC_LABELS;
+
+/** 会計基準ごとの候補タグ。優先順位を守るため配列は読み取り専用にする。 */
+export type MetricTagCandidates = Readonly<
+  Partial<Record<AccountingStandard, readonly string[]>>
+>;
 
 /**
  * 会計基準ごとの候補タグ名（ローカル名、優先順）
  * 配列の先頭から検索し、最初にヒットした値を採用する
  */
-export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, string[]>>> = {
+export const METRIC_TAGS = {
   // IFRS 採用企業の EDINET タクソノミ（jpigp_cor）は要素名末尾に「IFRS」が付き、
   // 有報サマリー（jpcrp_cor）は「...IFRSSummaryOfBusinessResults」形式になる。
   // サフィックスなしの名前はヒットしないことがあるため、実在形を先頭に置き、
   // 旧候補もフォールバックとして残す（マッチしなければ単に次へ進むだけで無害）。
   revenue: {
-    JGAAP: ['NetSales', 'NetSalesSummaryOfBusinessResults', 'Revenues', 'OperatingRevenues'],
-    IFRS: ['RevenueIFRS', 'RevenueIFRSSummaryOfBusinessResults', 'NetSalesIFRS', 'SalesIFRS', 'Revenue', 'SalesRevenues', 'TotalNetRevenues', 'OperatingRevenues', 'NetSales'],
+    JGAAP: [
+      'NetSales',
+      'NetSalesSummaryOfBusinessResults',
+      'Revenues',
+      'OperatingRevenues',
+    ],
+    IFRS: [
+      'RevenueIFRS',
+      'RevenueIFRSSummaryOfBusinessResults',
+      'NetSalesIFRS',
+      'SalesIFRS',
+      'Revenue',
+      'SalesRevenues',
+      'TotalNetRevenues',
+      'OperatingRevenues',
+      'NetSales',
+    ],
     USGAAP: ['Revenues', 'SalesRevenueNet'],
   },
   operating_profit: {
     JGAAP: ['OperatingIncome', 'OperatingIncomeSummaryOfBusinessResults'],
-    IFRS: ['OperatingProfitLossIFRS', 'OperatingProfitLossIFRSSummaryOfBusinessResults', 'OperatingIncomeIFRS', 'OperatingProfit', 'OperatingProfitLoss'],
+    IFRS: [
+      'OperatingProfitLossIFRS',
+      'OperatingProfitLossIFRSSummaryOfBusinessResults',
+      'OperatingIncomeIFRS',
+      'OperatingProfit',
+      'OperatingProfitLoss',
+    ],
     USGAAP: ['OperatingIncomeLoss'],
   },
   net_income_parent: {
-    JGAAP: ['ProfitLossAttributableToOwnersOfParent', 'ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults'],
-    IFRS: ['ProfitLossAttributableToOwnersOfParentIFRS', 'ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults', 'ProfitAttributableToOwnersOfParent'],
+    JGAAP: [
+      'ProfitLossAttributableToOwnersOfParent',
+      'ProfitLossAttributableToOwnersOfParentSummaryOfBusinessResults',
+    ],
+    IFRS: [
+      'ProfitLossAttributableToOwnersOfParentIFRS',
+      'ProfitLossAttributableToOwnersOfParentIFRSSummaryOfBusinessResults',
+      'ProfitAttributableToOwnersOfParent',
+    ],
     USGAAP: ['NetIncomeLossAvailableToCommonStockholders'],
   },
   total_assets: {
     JGAAP: ['TotalAssets', 'TotalAssetsSummaryOfBusinessResults'],
-    IFRS: ['TotalAssetsIFRS', 'TotalAssetsIFRSSummaryOfBusinessResults', 'AssetsIFRS', 'Assets', 'TotalAssets'],
+    IFRS: [
+      'TotalAssetsIFRS',
+      'TotalAssetsIFRSSummaryOfBusinessResults',
+      'AssetsIFRS',
+      'Assets',
+      'TotalAssets',
+    ],
     USGAAP: ['AssetsTotal'],
   },
   equity: {
     JGAAP: ['NetAssets', 'NetAssetsSummaryOfBusinessResults'],
-    IFRS: ['EquityIFRS', 'TotalEquityIFRS', 'TotalEquityIFRSSummaryOfBusinessResults', 'TotalEquity', 'Equity'],
+    IFRS: [
+      'EquityIFRS',
+      'TotalEquityIFRS',
+      'TotalEquityIFRSSummaryOfBusinessResults',
+      'TotalEquity',
+      'Equity',
+    ],
     USGAAP: ['StockholdersEquity'],
   },
   operating_cf: {
     // jppfs_cor の本表タグは NetCashProvidedByUsedInOperatingActivities。
     // 旧候補 CashFlowsFromOperatingActivities は標準要素として確認できないため、
     // 実在形を先頭に置く（サマリータグも追加）
-    JGAAP: ['NetCashProvidedByUsedInOperatingActivities', 'CashFlowsFromOperatingActivitiesSummaryOfBusinessResults', 'CashFlowsFromOperatingActivities'],
-    IFRS: ['NetCashProvidedByUsedInOperatingActivitiesIFRS', 'CashFlowsFromUsedInOperatingActivitiesIFRS', 'CashFlowsFromUsedInOperatingActivities', 'NetCashProvidedByUsedInOperatingActivities'],
+    JGAAP: [
+      'NetCashProvidedByUsedInOperatingActivities',
+      'CashFlowsFromOperatingActivitiesSummaryOfBusinessResults',
+      'CashFlowsFromOperatingActivities',
+    ],
+    IFRS: [
+      'NetCashProvidedByUsedInOperatingActivitiesIFRS',
+      'CashFlowsFromUsedInOperatingActivitiesIFRS',
+      'CashFlowsFromUsedInOperatingActivities',
+      'NetCashProvidedByUsedInOperatingActivities',
+    ],
     USGAAP: ['NetCashProvidedByUsedInOperatingActivities'],
   },
   investing_cf: {
-    JGAAP: ['NetCashProvidedByUsedInInvestingActivities', 'CashFlowsFromInvestingActivitiesSummaryOfBusinessResults', 'CashFlowsFromInvestingActivities'],
-    IFRS: ['NetCashProvidedByUsedInInvestingActivitiesIFRS', 'CashFlowsFromUsedInInvestingActivitiesIFRS', 'CashFlowsFromUsedInInvestingActivities', 'NetCashProvidedByUsedInInvestingActivities'],
+    JGAAP: [
+      'NetCashProvidedByUsedInInvestingActivities',
+      'CashFlowsFromInvestingActivitiesSummaryOfBusinessResults',
+      'CashFlowsFromInvestingActivities',
+    ],
+    IFRS: [
+      'NetCashProvidedByUsedInInvestingActivitiesIFRS',
+      'CashFlowsFromUsedInInvestingActivitiesIFRS',
+      'CashFlowsFromUsedInInvestingActivities',
+      'NetCashProvidedByUsedInInvestingActivities',
+    ],
     USGAAP: ['NetCashProvidedByUsedInInvestingActivities'],
   },
   issued_shares: {
-    JGAAP: ['TotalNumberOfIssuedSharesSummaryOfBusinessResults', 'NumberOfSharesIssuedSharesVotingRights'],
-    IFRS: ['NumberOfSharesIssuedSharesVotingRights', 'TotalNumberOfIssuedSharesSummaryOfBusinessResults'],
+    JGAAP: [
+      'TotalNumberOfIssuedSharesSummaryOfBusinessResults',
+      'NumberOfSharesIssuedSharesVotingRights',
+    ],
+    IFRS: [
+      'NumberOfSharesIssuedSharesVotingRights',
+      'TotalNumberOfIssuedSharesSummaryOfBusinessResults',
+    ],
     USGAAP: ['CommonStockSharesIssued'],
   },
   eps_basic: {
-    JGAAP: ['BasicEarningsPerShare', 'BasicEarningsLossPerShare', 'BasicEarningsLossPerShareSummaryOfBusinessResults'],
-    IFRS: ['BasicEarningsLossPerShareIFRS', 'BasicEarningsLossPerShareIFRSSummaryOfBusinessResults', 'BasicEarningsPerShareIFRS', 'BasicEarningsPerShare', 'BasicEarningsLossPerShare'],
+    JGAAP: [
+      'BasicEarningsPerShare',
+      'BasicEarningsLossPerShare',
+      'BasicEarningsLossPerShareSummaryOfBusinessResults',
+    ],
+    IFRS: [
+      'BasicEarningsLossPerShareIFRS',
+      'BasicEarningsLossPerShareIFRSSummaryOfBusinessResults',
+      'BasicEarningsPerShareIFRS',
+      'BasicEarningsPerShare',
+      'BasicEarningsLossPerShare',
+    ],
     USGAAP: ['EarningsPerShareBasic'],
   },
   interest_bearing_debt: {
     // 合算用: 個別タグを検索して合計する。
     // 借入金・社債に加え、1年内償還社債・CP・リース債務も有利子負債に含める
     // （理論株価の控除項目と ROIC 分母の過小評価を防ぐ。見つからないタグは単にスキップされる）
-    JGAAP: ['ShortTermLoansPayable', 'CurrentPortionOfLongTermLoansPayable', 'LongTermLoansPayable', 'BondsPayable', 'CurrentPortionOfBonds', 'CommercialPapersLiabilities', 'LeaseObligationsCL', 'LeaseObligationsNCL'],
-    IFRS: ['ShortTermLoansPayable', 'CurrentPortionOfLongTermLoansPayable', 'LongTermLoansPayable', 'BondsPayable', 'CurrentPortionOfBonds', 'CommercialPapersLiabilities', 'LeaseObligationsCL', 'LeaseObligationsNCL'],
+    JGAAP: [
+      'ShortTermLoansPayable',
+      'CurrentPortionOfLongTermLoansPayable',
+      'LongTermLoansPayable',
+      'BondsPayable',
+      'CurrentPortionOfBonds',
+      'CommercialPapersLiabilities',
+      'LeaseObligationsCL',
+      'LeaseObligationsNCL',
+    ],
+    IFRS: [
+      'ShortTermLoansPayable',
+      'CurrentPortionOfLongTermLoansPayable',
+      'LongTermLoansPayable',
+      'BondsPayable',
+      'CurrentPortionOfBonds',
+      'CommercialPapersLiabilities',
+      'LeaseObligationsCL',
+      'LeaseObligationsNCL',
+    ],
     USGAAP: ['ShortTermLoansPayable', 'LongTermLoansPayable', 'BondsPayable'],
   },
   interest_expense: {
     JGAAP: ['InterestExpenses', 'InterestExpense', 'InterestExpensesNOE'],
-    IFRS: ['FinanceCostsIFRS', 'InterestExpenseIFRS', 'InterestExpense', 'FinanceCosts'],
+    IFRS: [
+      'FinanceCostsIFRS',
+      'InterestExpenseIFRS',
+      'InterestExpense',
+      'FinanceCosts',
+    ],
     USGAAP: ['InterestExpense'],
   },
   cash_and_equivalents: {
     JGAAP: ['CashAndDeposits', 'CashAndCashEquivalents'],
-    IFRS: ['CashAndCashEquivalentsIFRS', 'CashAndCashEquivalentsIFRSSummaryOfBusinessResults', 'CashAndCashEquivalents', 'CashAndDeposits'],
+    IFRS: [
+      'CashAndCashEquivalentsIFRS',
+      'CashAndCashEquivalentsIFRSSummaryOfBusinessResults',
+      'CashAndCashEquivalents',
+      'CashAndDeposits',
+    ],
     USGAAP: ['CashAndCashEquivalentsAtCarryingValue'],
   },
   current_assets: {
@@ -145,27 +236,51 @@ export const METRIC_TAGS: Record<MetricKey, Partial<Record<AccountingStandard, s
   },
   current_liabilities: {
     JGAAP: ['CurrentLiabilities'],
-    IFRS: ['TotalCurrentLiabilitiesIFRS', 'CurrentLiabilitiesIFRS', 'CurrentLiabilities'],
+    IFRS: [
+      'TotalCurrentLiabilitiesIFRS',
+      'CurrentLiabilitiesIFRS',
+      'CurrentLiabilities',
+    ],
     USGAAP: ['LiabilitiesCurrent'],
   },
   non_current_liabilities: {
     JGAAP: ['NoncurrentLiabilities', 'FixedLiabilities'],
-    IFRS: ['TotalNonCurrentLiabilitiesIFRS', 'NonCurrentLiabilitiesIFRS', 'NoncurrentLiabilities'],
+    IFRS: [
+      'TotalNonCurrentLiabilitiesIFRS',
+      'NonCurrentLiabilitiesIFRS',
+      'NoncurrentLiabilities',
+    ],
     USGAAP: ['LiabilitiesNoncurrent'],
   },
   shareholders_equity: {
     JGAAP: ['ShareholdersEquity', 'StockholdersEquity'],
-    IFRS: ['EquityAttributableToOwnersOfParentIFRS', 'EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults', 'EquityAttributableToOwnersOfParent'],
+    IFRS: [
+      'EquityAttributableToOwnersOfParentIFRS',
+      'EquityAttributableToOwnersOfParentIFRSSummaryOfBusinessResults',
+      'EquityAttributableToOwnersOfParent',
+    ],
     USGAAP: ['StockholdersEquity'],
   },
-};
+} satisfies Record<MetricKey, MetricTagCandidates>;
+
+/**
+ * 抽出対象はラベル定義から導出し、キー追加時に別の一覧を更新し忘れないようにする。
+ *
+ * Object.keys は標準ライブラリ上 string[] を返すため、この境界だけ MetricKey へ絞る。
+ * 列挙順は METRIC_LABELS の定義順を維持し、既存の抽出結果順も変えない。
+ */
+export const METRIC_KEYS: readonly MetricKey[] = Object.freeze(
+  Object.keys(METRIC_LABELS) as MetricKey[]
+);
 
 /**
  * 合算が必要な特殊メトリックのリスト
  * 有利子負債は XBRL に単一タグが存在しないため、
  * 短期借入金 + 長期借入金 + 社債 等の個別タグを全て足し合わせる
  */
-export const AGGREGATE_METRICS: MetricKey[] = ['interest_bearing_debt'];
+export const AGGREGATE_METRICS: readonly MetricKey[] = [
+  'interest_bearing_debt',
+];
 
 /**
  * XBRL/CSV 内の AccountingStandardsDEI タグの値から会計基準を判定する
@@ -174,7 +289,9 @@ export const AGGREGATE_METRICS: MetricKey[] = ['interest_bearing_debt'];
  * JMIS は実質的に IFRS のタグ体系を使うため、IFRS として扱う。
  * 判定不能な場合は J-GAAP（日本の上場企業で最多）にフォールバックする。
  */
-export function detectAccountingStandard(raw: string | null | undefined): AccountingStandard {
+export function detectAccountingStandard(
+  raw: string | null | undefined
+): AccountingStandard {
   if (!raw) return 'JGAAP';
   const s = raw.toLowerCase();
   if (s.includes('ifrs')) return 'IFRS';

@@ -29,17 +29,17 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     fiscal_year: 2024,
     fiscal_quarter: 'FY',
     consolidation_type: 'consolidated',
-    revenue: 50_000_000_000,            // 500億円
-    operating_income: 5_000_000_000,    // 50億円
-    net_income: 3_000_000_000,          // 30億円
-    total_assets: 40_000_000_000,       // 400億円
-    equity: 20_000_000_000,             // 200億円
+    revenue: 50_000_000_000, // 500億円
+    operating_income: 5_000_000_000, // 50億円
+    net_income: 3_000_000_000, // 30億円
+    total_assets: 40_000_000_000, // 400億円
+    equity: 20_000_000_000, // 200億円
     interest_bearing_debt: 8_000_000_000, // 80億円
-    operating_cf: 4_500_000_000,        // 45億円
-    investing_cf: -2_000_000_000,       // -20億円
-    shares_outstanding: 100_000_000,    // 1億株
-    interest_expense: 200_000_000,      // 2億円
-    current_stock_price: 250,           // 250円/株
+    operating_cf: 4_500_000_000, // 45億円
+    investing_cf: -2_000_000_000, // -20億円
+    shares_outstanding: 100_000_000, // 1億株
+    interest_expense: 200_000_000, // 2億円
+    current_stock_price: 250, // 250円/株
     cash_and_equivalents: null,
     current_assets: null,
     investments_and_other_assets: null,
@@ -55,17 +55,17 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     fiscal_year: 2023,
     fiscal_quarter: 'FY',
     consolidation_type: 'consolidated',
-    revenue: 45_000_000_000,            // 450億円
-    operating_income: 4_200_000_000,    // 42億円
-    net_income: 2_500_000_000,          // 25億円
-    total_assets: 38_000_000_000,       // 380億円
-    equity: 18_000_000_000,             // 180億円
+    revenue: 45_000_000_000, // 450億円
+    operating_income: 4_200_000_000, // 42億円
+    net_income: 2_500_000_000, // 25億円
+    total_assets: 38_000_000_000, // 380億円
+    equity: 18_000_000_000, // 180億円
     interest_bearing_debt: 9_000_000_000, // 90億円
-    operating_cf: 4_000_000_000,        // 40億円
-    investing_cf: -1_800_000_000,       // -18億円
-    shares_outstanding: 100_000_000,    // 1億株
-    interest_expense: 250_000_000,      // 2.5億円
-    current_stock_price: 220,           // 220円/株
+    operating_cf: 4_000_000_000, // 40億円
+    investing_cf: -1_800_000_000, // -18億円
+    shares_outstanding: 100_000_000, // 1億株
+    interest_expense: 250_000_000, // 2.5億円
+    current_stock_price: 220, // 220円/株
     cash_and_equivalents: null,
     current_assets: null,
     investments_and_other_assets: null,
@@ -81,17 +81,17 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     fiscal_year: 2022,
     fiscal_quarter: 'FY',
     consolidation_type: 'consolidated',
-    revenue: 42_000_000_000,            // 420億円
-    operating_income: 3_800_000_000,    // 38億円
-    net_income: 2_200_000_000,          // 22億円
-    total_assets: 35_000_000_000,       // 350億円
-    equity: 16_000_000_000,             // 160億円
+    revenue: 42_000_000_000, // 420億円
+    operating_income: 3_800_000_000, // 38億円
+    net_income: 2_200_000_000, // 22億円
+    total_assets: 35_000_000_000, // 350億円
+    equity: 16_000_000_000, // 160億円
     interest_bearing_debt: 10_000_000_000, // 100億円
-    operating_cf: 3_500_000_000,        // 35億円
-    investing_cf: -1_500_000_000,       // -15億円
-    shares_outstanding: 100_000_000,    // 1億株
-    interest_expense: 300_000_000,      // 3億円
-    current_stock_price: 200,           // 200円/株
+    operating_cf: 3_500_000_000, // 35億円
+    investing_cf: -1_500_000_000, // -15億円
+    shares_outstanding: 100_000_000, // 1億株
+    interest_expense: 300_000_000, // 3億円
+    current_stock_price: 200, // 200円/株
     cash_and_equivalents: null,
     current_assets: null,
     investments_and_other_assets: null,

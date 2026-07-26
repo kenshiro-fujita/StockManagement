@@ -1,42 +1,40 @@
+/**
+ * Next.js Proxy で Supabase セッションを更新し、未認証アクセスを遮断します。
+ */
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { hasEnvVars } from '../utils';
+import type { Database } from '@/lib/types/database';
+import { getSupabasePublicConfig, hasSupabaseEnv } from '@/lib/supabase/env';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  // If the env vars are not set, skip proxy check. You can remove this
-  // once you setup the project.
-  if (!hasEnvVars) {
+  // 初期セットアップ画面まで到達できなくなるのを避けるため、未設定時だけ認証処理を省略します。
+  if (!hasSupabaseEnv()) {
     return supabaseResponse;
   }
 
-  // With Fluid compute, don't put this client in a global environment
-  // variable. Always create a new one on each request.
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
+  const { url, publishableKey } = getSupabasePublicConfig();
+  const supabase = createServerClient<Database>(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) =>
+          request.cookies.set(name, value)
+        );
+        supabaseResponse = NextResponse.next({
+          request,
+        });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+      },
+    },
+  });
 
   // Do not run code between createServerClient and
   // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
@@ -48,9 +46,10 @@ export async function updateSession(request: NextRequest) {
   const user = data?.claims;
 
   // 未認証ユーザーは公開パス（トップページと認証フロー）以外へアクセスできない。
-  // ページ側のゲートと二重になるが、middleware を第一防衛線とする多層防御。
+  // ページ側のゲートと二重になりますが、Proxy を第一防衛線とする多層防御です。
   const { pathname } = request.nextUrl;
-  const isPublicPath = pathname === '/' || pathname.startsWith('/auth');
+  const isAuthPath = pathname === '/auth' || pathname.startsWith('/auth/');
+  const isPublicPath = pathname === '/' || isAuthPath;
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();

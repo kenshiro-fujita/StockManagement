@@ -1,36 +1,33 @@
+/**
+ * Server Component / Server Action 用の型付き Supabase クライアントを生成します。
+ *
+ * Cookie ストアとクライアントはリクエストをまたいで共有せず、認証状態が別ユーザーへ
+ * 漏れないよう呼び出しごとに構築します。
+ */
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-// クエリ結果に型を効かせるための手起こし Database 型（詳細は database.ts 冒頭コメント参照）
 import type { Database } from '@/lib/types/database';
+import { getSupabasePublicConfig } from '@/lib/supabase/env';
 
-/**
- * Especially important if using Fluid compute: Don't put this client in a
- * global variable. Always create a new client within each function when using
- * it.
- */
 export async function createClient() {
   const cookieStore = await cookies();
+  const { url, publishableKey } = getSupabasePublicConfig();
 
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
-            );
-          } catch {
-            // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have proxy refreshing
-            // user sessions.
-          }
-        },
+  return createServerClient<Database>(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // Server Component の Cookie は読み取り専用です。
+          // Proxy がセッションを更新する構成なので、ここでの書き込み失敗は無視できます。
+        }
+      },
+    },
+  });
 }

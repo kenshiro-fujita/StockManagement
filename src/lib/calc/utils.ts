@@ -12,9 +12,14 @@
  *   スプレッドシートの ROUNDDOWN と同一挙動。Math.floor は負値で絶対値が増えるため使わない。
  */
 
-/** パーセンテージ・小数指標用: 小数点以下第2位を四捨五入（絶対値基準） */
-export function roundPercent(value: number): number {
+/** 小数指標用: 小数点以下第2位を四捨五入（絶対値基準） */
+export function roundToTwoDecimals(value: number): number {
   return Math.sign(value) * (Math.round(Math.abs(value) * 100) / 100);
+}
+
+/** パーセンテージ計算で意図が読み取れるよう、汎用の2桁丸めへ名前を付ける。 */
+export function roundPercent(value: number): number {
+  return roundToTwoDecimals(value);
 }
 
 /** 円単位の四捨五入（絶対値基準）。事業価値・時価総額等の金額丸めに使用 */
@@ -27,6 +32,22 @@ export function truncateYen(value: number): number {
   return Math.trunc(value);
 }
 
+/** 自己資本の入力候補だけを受け取り、DB 行全体への依存を避ける。 */
+type EquityInputs = {
+  equity: number;
+  shareholders_equity: number | null;
+};
+
+/** 計算根拠に残す自己資本カラムは、この2種類以外を許可しない。 */
+export type EquityField = 'shareholders_equity' | 'equity';
+
+/** 値と参照元を常に一緒に運び、表示メタデータとの食い違いを防ぐ。 */
+export type EquityResolution = {
+  value: number;
+  field: EquityField;
+  label: string;
+};
+
 /**
  * 計算に使う「自己資本」を解決する
  *
@@ -36,12 +57,17 @@ export function truncateYen(value: number): number {
  * 無い場合は従来どおり純資産（equity）にフォールバックする。
  * どちらを使ったかは field で返し、計算根拠表示（CalcLogicPanel）で確認できるようにする。
  */
-export function resolveEquity(fd: {
-  equity: number;
-  shareholders_equity: number | null;
-}): { value: number; field: string; label: string } {
+export function resolveEquity(fd: EquityInputs): EquityResolution {
   if (fd.shareholders_equity != null) {
-    return { value: fd.shareholders_equity, field: 'shareholders_equity', label: '自己資本（株主資本）' };
+    return {
+      value: fd.shareholders_equity,
+      field: 'shareholders_equity',
+      label: '自己資本（株主資本）',
+    };
   }
-  return { value: fd.equity, field: 'equity', label: '自己資本（純資産で代用）' };
+  return {
+    value: fd.equity,
+    field: 'equity',
+    label: '自己資本（純資産で代用）',
+  };
 }

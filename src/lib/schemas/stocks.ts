@@ -1,4 +1,8 @@
+/**
+ * 銘柄マスタの作成・更新フォームで共有する入力制約と選択肢です。
+ */
 import { z } from 'zod';
+import { idSchema } from '@/lib/schemas/common';
 
 export const createStockSchema = z.object({
   // 証券コードは英数字のみ許可する。
@@ -23,7 +27,7 @@ export const createStockSchema = z.object({
 export type CreateStockInput = z.infer<typeof createStockSchema>;
 
 export const updateStockSchema = createStockSchema.extend({
-  id: z.uuid({ error: '無効なIDです' }),
+  id: idSchema,
 });
 
 export type UpdateStockInput = z.infer<typeof updateStockSchema>;

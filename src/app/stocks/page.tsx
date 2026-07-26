@@ -2,7 +2,10 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { StockTable, type StockWithIndicators } from '@/components/stocks/stock-table';
+import {
+  StockTable,
+  type StockWithIndicators,
+} from '@/components/stocks/stock-table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { connection } from 'next/server';
 import { getStocksWithIndicators } from '@/lib/stocks/stocks-with-indicators';

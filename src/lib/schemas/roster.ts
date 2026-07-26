@@ -52,7 +52,11 @@ export type UpdateRosterInput = z.infer<typeof updateRosterSchema>;
 
 export const updateRatingSchema = z.object({
   stock_id: z.uuid('銘柄IDが不正です'),
-  rating: z.number().int().min(1, '1以上を指定してください').max(5, '5以下を指定してください'),
+  rating: z
+    .number()
+    .int()
+    .min(1, '1以上を指定してください')
+    .max(5, '5以下を指定してください'),
 });
 
 export type UpdateRatingInput = z.infer<typeof updateRatingSchema>;
