@@ -1,0 +1,9 @@
+[workflow]
+
+activation_steps_prepend = [
+  "Before starting this workflow, verify that the user explicitly authorized creating a local commit for this Dev Auto run in the current conversation. If that authorization is absent, stop without changing files and route the task to bmad-quick-dev instead. Dev Auto records final_revision from a commit and must not run in the repository's normal uncommitted mode.",
+]
+
+persistent_facts = [
+  "Repository Git policy (higher priority than workflow defaults): Dev Auto may create its required local commit only when the user explicitly authorized that commit for this run in the current conversation. Never run git push or create a pull request unless the user separately and explicitly requests that exact action.",
+]

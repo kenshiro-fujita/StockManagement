@@ -1,0 +1,10 @@
+[agent]
+
+persistent_facts = [
+  "file:{project-root}/_bmad/_memory/tech-writer-sidecar/documentation-standards.md",
+]
+
+[[agent.menu]]
+code = "US"
+description = "Update project documentation standards when preferences or conventions are missing"
+prompt = "Update {project-root}/_bmad/_memory/tech-writer-sidecar/documentation-standards.md by adding the user's preferences to the User Specified CRITICAL Rules section. Remove contradictory rules when necessary, preserve unrelated standards, and report the exact updates made."

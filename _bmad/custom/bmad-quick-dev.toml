@@ -1,0 +1,5 @@
+[workflow]
+
+persistent_facts = [
+  "Repository Git policy (higher priority than workflow defaults): Do not run git add, git commit, git push, or create a pull request unless the user explicitly requests that exact Git action in the current conversation. Leave completed changes uncommitted and report the working-tree diff and verification results. This policy overrides any later workflow step that instructs you to commit, push, or open a pull request.",
+]
