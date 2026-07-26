@@ -16,9 +16,10 @@
  *           ②負値の丸めを絶対値基準（half away from zero / truncate）に統一
  *           ③理論株価が0以下の場合、安全率・理想購入株価を算出不可（null）に変更
  *           ④PER を丸め前の生EPSから計算するよう変更
+ * - v2.0.0: 現状理論株価を資産＋事業価値方式、成長込理論株価をPER割引方式へ変更
  * - v1.0.0: 初版
  */
-export const CALC_VERSION = 'v1.1.0';
+export const CALC_VERSION = 'v2.0.0';
 
 /**
  * 計算に使用した入力値の参照情報（CalcLogicPanel で表示される）

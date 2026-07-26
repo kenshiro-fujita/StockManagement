@@ -8,8 +8,9 @@
  *   財務データ → 収益性指標（自己資本比率, 利益率）
  *   財務データ + パラメータ → 資本効率（ROIC）
  *   ROIC + 全期間データ → 移動平均ROIC
- *   営業利益 + パラメータ → 事業価値（DCF）
- *   事業価値 + 資産価値 - 負債 → 理論株価
+ *   営業利益 + 事業価値倍率 → 事業価値
+ *   流動資産・流動負債・投資その他の資産 → 財産価値
+ *   事業価値 + 財産価値 → 現状理論株価
  *   理論株価 - 現在株価 → 安全域・安全率
  *
  * 全ての計算結果は CalcResult<number> 型で返され、
@@ -137,22 +138,20 @@ export function calculateAllIndicators(
   // 理論価値
   const businessValue = calcBusinessValue(
     latest.operating_income,
-    parameters.tax_rate,
-    parameters.discount_rate,
-    parameters.growth_rate,
     parameters.cap_multiplier,
   );
-  const assetValue = calcAssetValue(eq.value, eq.field, eq.label);
+  const assetValue = calcAssetValue(
+    latest.current_assets,
+    latest.current_liabilities,
+    latest.investments_and_other_assets,
+  );
   const theoryPrice = businessValue.value != null && assetValue.value != null
-    ? calcTheoryPrice(businessValue.value, assetValue.value, debt, latest.shares_outstanding)
+    ? calcTheoryPrice(businessValue.value, assetValue.value, latest.shares_outstanding)
     : nullResult('現状理論株価（事業価値または資産価値算出不可）');
   const growthTheoryPrice = calcGrowthTheoryPrice(
-    latest.operating_income,
-    parameters.tax_rate,
+    parameters.projected_net_income,
     parameters.discount_rate,
     parameters.growth_rate,
-    eq.value,
-    debt,
     latest.shares_outstanding,
   );
 

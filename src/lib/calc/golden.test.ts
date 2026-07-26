@@ -90,31 +90,30 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
   });
 
   describe('理論価値', () => {
-    it('事業価値 = 35,000,000,000円（上限倍率適用）', () => {
+    it('事業価値 = 50,000,000,000円', () => {
       expect(p.businessValue.value).toBe(GOLDEN_EXPECTED.businessValue);
-      // 上限倍率が適用されていることを検証
-      expect(p.businessValue.metadata.formula).toContain('上限倍率適用');
+      expect(p.businessValue.metadata.formula).toContain('事業価値倍率');
     });
 
     it('資産価値 = 20,000,000,000円', () => {
       expect(p.assetValue.value).toBe(GOLDEN_EXPECTED.assetValue);
     });
 
-    it('現状理論株価 = 470円', () => {
+    it('現状理論株価 = 700円', () => {
       expect(p.theoryPrice.value).toBe(GOLDEN_EXPECTED.theoryPrice);
     });
 
-    it('成長込理論株価 = 703円', () => {
+    it('成長込理論株価 = 567円', () => {
       expect(p.growthTheoryPrice.value).toBe(GOLDEN_EXPECTED.growthTheoryPrice);
     });
   });
 
   describe('理論PER系', () => {
-    it('理論時価総額 = 47,000,000,000円', () => {
+    it('理論時価総額 = 70,000,000,000円', () => {
       expect(p.theoryMarketCap.value).toBe(GOLDEN_EXPECTED.theoryMarketCap);
     });
 
-    it('理論PER = 15.67倍', () => {
+    it('理論PER = 23.33倍', () => {
       expect(p.theoryPER.value).toBe(GOLDEN_EXPECTED.theoryPER);
     });
 
@@ -128,27 +127,27 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
   });
 
   describe('安全性指標', () => {
-    it('安全域（現状）= 220円', () => {
+    it('安全域（現状）= 450円', () => {
       expect(p.safetyMarginCurrent.value).toBe(GOLDEN_EXPECTED.safetyMarginCurrent);
     });
 
-    it('安全域（成長込）= 453円', () => {
+    it('安全域（成長込）= 317円', () => {
       expect(p.safetyMarginGrowth.value).toBe(GOLDEN_EXPECTED.safetyMarginGrowth);
     });
 
-    it('安全率（現状）= 46.81%', () => {
+    it('安全率（現状）= 64.29%', () => {
       expect(p.safetyRateCurrent.value).toBe(GOLDEN_EXPECTED.safetyRateCurrent);
     });
 
-    it('安全率（成長込）= 64.44%', () => {
+    it('安全率（成長込）= 55.91%', () => {
       expect(p.safetyRateGrowth.value).toBe(GOLDEN_EXPECTED.safetyRateGrowth);
     });
 
-    it('理想購入株価（対現状）= 235円', () => {
+    it('理想購入株価（対現状）= 350円', () => {
       expect(p.idealBuyPriceCurrent.value).toBe(GOLDEN_EXPECTED.idealBuyPriceCurrent);
     });
 
-    it('理想購入株価（対成長）= 351円', () => {
+    it('理想購入株価（対成長）= 283円', () => {
       expect(p.idealBuyPriceGrowth.value).toBe(GOLDEN_EXPECTED.idealBuyPriceGrowth);
     });
   });
@@ -160,7 +159,7 @@ describe('ゴールデンテスト（FY2024 最新期）', () => {
       // 「ゴールデン値の再検証＋バージョン更新」を強制する仕組み
       const indicators = Object.values(p);
       for (const indicator of indicators) {
-        expect(indicator.metadata.calcVersion).toBe('v1.1.0');
+        expect(indicator.metadata.calcVersion).toBe('v2.0.0');
       }
     });
 
@@ -230,12 +229,11 @@ describe('エッジケース', () => {
     expect(result.period.safetyRateCurrent.value).toBeNull();
   });
 
-  it('interestBearingDebtがnullの場合、0として計算する', () => {
+  it('interestBearingDebtは現状理論株価に影響しない', () => {
     const dataWithNullDebt = [
       { ...GOLDEN_FINANCIAL_DATA[0], interest_bearing_debt: null },
     ];
     const result = calculateAllIndicators(dataWithNullDebt, GOLDEN_PARAMETERS);
-    // 有利子負債0 → 理論株価 = (35B + 20B - 0) ÷ 100M = 550
-    expect(result.period.theoryPrice.value).toBe(550);
+    expect(result.period.theoryPrice.value).toBe(GOLDEN_EXPECTED.theoryPrice);
   });
 });

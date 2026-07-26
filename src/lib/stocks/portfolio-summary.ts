@@ -66,7 +66,7 @@ export const getPortfolioSummary = cache(async (): Promise<PortfolioSummary> => 
         .select('id, stock_code, company_name')
         .order('created_at', { ascending: false }),
       supabase.from('financial_data').select(INDICATOR_COLUMNS).order('fiscal_year', { ascending: false }),
-      supabase.from('parameters').select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier'),
+      supabase.from('parameters').select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income'),
       supabase.from('transactions').select('stock_id, transaction_type, trade_date, quantity, unit_price, fee'),
     ]);
 
@@ -91,6 +91,7 @@ export const getPortfolioSummary = cache(async (): Promise<PortfolioSummary> => 
       growth_rate: Number(p.growth_rate),
       tax_rate: Number(p.tax_rate),
       cap_multiplier: Number(p.cap_multiplier),
+      projected_net_income: p.projected_net_income == null ? null : Number(p.projected_net_income),
     });
   }
   const txByStock = new Map<string, TransactionInput[]>();

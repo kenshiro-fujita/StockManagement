@@ -71,6 +71,8 @@ export const updateParametersSchema = z
       .number()
       .min(1, '上限倍率は1以上で入力してください')
       .max(100, '上限倍率は100以下で入力してください'),
+    // 6年目当期純利益予測（円）。成長込理論株価の算出に使う任意入力
+    projected_net_income: z.number().nullable().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.discount_rate <= data.growth_rate) {

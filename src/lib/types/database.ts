@@ -185,6 +185,7 @@ export type Database = {
           growth_rate: number;
           tax_rate: number;
           cap_multiplier: number;
+          projected_net_income: number | null;
           created_at: string | null;
           updated_at: string | null;
         };
@@ -197,6 +198,7 @@ export type Database = {
           growth_rate?: number;
           tax_rate?: number;
           cap_multiplier?: number;
+          projected_net_income?: number | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -208,6 +210,7 @@ export type Database = {
           growth_rate?: number;
           tax_rate?: number;
           cap_multiplier?: number;
+          projected_net_income?: number | null;
           created_at?: string | null;
           updated_at?: string | null;
         };

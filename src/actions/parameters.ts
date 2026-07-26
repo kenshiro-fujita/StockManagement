@@ -25,7 +25,7 @@ export async function getOrCreateParameters(
   // Try to fetch existing parameters
   const { data: existing } = await supabase
     .from('parameters')
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income')
     .eq('stock_id', stockId)
     .eq('user_id', user.id)
     .single();
@@ -39,7 +39,7 @@ export async function getOrCreateParameters(
   const { data: created, error } = await supabase
     .from('parameters')
     .insert({ user_id: user.id, stock_id: stockId, ...PARAMETER_DEFAULTS })
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income')
     .single();
 
   if (error) {
@@ -47,7 +47,7 @@ export async function getOrCreateParameters(
     if (error.code === '23505') {
       const { data: retry } = await supabase
         .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income')
         .eq('stock_id', stockId)
         .eq('user_id', user.id)
         .single();
@@ -86,10 +86,11 @@ export async function updateParameters(
       growth_rate: parsed.data.growth_rate,
       tax_rate: parsed.data.tax_rate,
       cap_multiplier: parsed.data.cap_multiplier,
+      projected_net_income: parsed.data.projected_net_income ?? null,
     })
     .eq('stock_id', stockId)
     .eq('user_id', user.id)
-    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier');
+    .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income');
 
   if (error) {
     return { success: false, error: 'パラメータの更新に失敗しました' };
@@ -108,7 +109,7 @@ function toParametersRow(
   // Database 型の導入によりクエリ結果が型付くため、SELECT したカラムの Pick で受ける
   row: Pick<
     Tables<'parameters'>,
-    'id' | 'stock_id' | 'discount_rate' | 'growth_rate' | 'tax_rate' | 'cap_multiplier'
+    'id' | 'stock_id' | 'discount_rate' | 'growth_rate' | 'tax_rate' | 'cap_multiplier' | 'projected_net_income'
   >,
 ): ParametersRow {
   return {
@@ -118,5 +119,6 @@ function toParametersRow(
     growth_rate: Number(row.growth_rate),
     tax_rate: Number(row.tax_rate),
     cap_multiplier: Number(row.cap_multiplier),
+    projected_net_income: row.projected_net_income == null ? null : Number(row.projected_net_income),
   };
 }

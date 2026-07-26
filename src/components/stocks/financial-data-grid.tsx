@@ -113,6 +113,9 @@ function cellsToGridValues(cell: CellState | undefined): GridValues {
     interest_expense: v('interest_expense'),
     current_stock_price: v('current_stock_price'),
     shareholders_equity: v('shareholders_equity'),
+    current_assets: v('current_assets'),
+    current_liabilities: v('current_liabilities'),
+    investments_and_other_assets: v('investments_and_other_assets'),
   };
 }
 

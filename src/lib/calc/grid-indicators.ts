@@ -21,7 +21,7 @@ import {
 } from './ratios';
 import { calcPER, calcPBR, calcFCF } from './stock-metrics';
 import { calcYoYGrowthRate } from './growth';
-import { calcBusinessValue, calcTheoryPrice } from './theory-price';
+import { calcAssetValue, calcBusinessValue, calcTheoryPrice } from './theory-price';
 import { calcSafetyMargin, calcSafetyRate } from './safety';
 
 /** 計算指標の定義 */
@@ -50,6 +50,9 @@ export type GridValues = {
   interest_expense: number | null;
   current_stock_price: number | null;
   shareholders_equity: number | null;
+  current_assets: number | null;
+  current_liabilities: number | null;
+  investments_and_other_assets: number | null;
 };
 
 // ============================================================
@@ -87,23 +90,16 @@ function yen(value: number | null): string | null {
  * theory_price / safety_margin / safety_rate で共有し、式の重複を排除する
  */
 function gridTheoryPrice(v: GridValues, params: ParametersRow | null): number | null {
-  const equity = gridEquity(v);
-  // 営業利益・自己資本は 0 も正当な値（赤字転落・債務超過）なので == null で判定する
-  if (v.operating_income == null || equity == null || params == null) return null;
-  const businessValue = calcBusinessValue(
-    v.operating_income,
-    params.tax_rate,
-    params.discount_rate,
-    params.growth_rate,
-    params.cap_multiplier,
+  // 新方式では財産価値の3入力が揃わない限り、推測値で理論株価を出さない。
+  if (v.operating_income == null || params == null) return null;
+  const businessValue = calcBusinessValue(v.operating_income, params.cap_multiplier).value;
+  const assetValue = calcAssetValue(
+    v.current_assets,
+    v.current_liabilities,
+    v.investments_and_other_assets,
   ).value;
-  if (businessValue == null) return null;
-  return calcTheoryPrice(
-    businessValue,
-    equity,
-    v.interest_bearing_debt ?? 0,
-    v.shares_outstanding,
-  ).value;
+  if (businessValue == null || assetValue == null) return null;
+  return calcTheoryPrice(businessValue, assetValue, v.shares_outstanding).value;
 }
 
 // ============================================================
@@ -249,9 +245,6 @@ export const GRID_INDICATORS: GridIndicator[] = [
       return millions(
         calcBusinessValue(
           v.operating_income,
-          params.tax_rate,
-          params.discount_rate,
-          params.growth_rate,
           params.cap_multiplier,
         ).value,
       );
@@ -261,7 +254,14 @@ export const GRID_INDICATORS: GridIndicator[] = [
     key: 'asset_value',
     label: '現状資産価値',
     unit: '百万円',
-    calc: (v) => millions(gridEquity(v)),
+    calc: (v) =>
+      millions(
+        calcAssetValue(
+          v.current_assets,
+          v.current_liabilities,
+          v.investments_and_other_assets,
+        ).value,
+      ),
   },
   {
     key: 'theory_price',

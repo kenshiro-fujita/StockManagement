@@ -56,7 +56,7 @@ async function ComparisonContent({
         .order('fiscal_year', { ascending: false }),
       supabase
         .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier')
+        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income')
         .in('stock_id', stockIds),
     ]);
 
@@ -79,6 +79,7 @@ async function ComparisonContent({
       growth_rate: Number(p.growth_rate),
       tax_rate: Number(p.tax_rate),
       cap_multiplier: Number(p.cap_multiplier),
+      projected_net_income: p.projected_net_income == null ? null : Number(p.projected_net_income),
     });
   }
 

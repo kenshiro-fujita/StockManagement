@@ -1,70 +1,38 @@
 /**
- * 理論株価の算出関数群（山口揚平氏の手法ベース）
+ * 理論株価の算出関数群（スプレッドシート方式）
  *
- * 計算の流れ:
- * 1. 事業価値 = 営業利益 × (1-税率) ÷ (r-g)  ← DCF の永久成長モデル
- *    ただし r≦g だと発散するため、上限倍率（cap_multiplier）で制限する
- * 2. 資産価値 = 自己資本（簡易的に株主資本＝清算価値と近似）
- * 3. 理論株価 = (事業価値 + 資産価値 - 有利子負債) ÷ 発行済株式数
- * 4. 成長込理論株価 = 上限倍率を適用せず DCF のみで計算した理論株価
- * 5. 理論PER、将来時価総額、将来純利益 は理論株価から派生
+ * 2系統の理論株価を算出する:
+ * 【現状理論株価＝資産＋事業価値方式（グレアム型）】
+ *   1. 事業価値 = 営業利益 × 事業価値倍率（cap_multiplier、既定10）
+ *   2. 財産価値 = 流動資産 − 流動負債 × 1.2 + 投資その他の資産
+ *   3. 現状理論株価 = (事業価値 + 財産価値) ÷ 発行済株式数
+ *      ※ 有利子負債は控除しない（流動負債×1.2 で負債を保守的に見込む方式のため）
+ *
+ * 【成長込理論株価＝PER割引方式】
+ *   1. 理論PER = 1 ÷ (r − g)
+ *   2. 5年後理論時価総額 = 6年目当期純利益予測 × 理論PER
+ *   3. 理論時価総額 = 5年後理論時価総額 ÷ (1+r)^5
+ *   4. 成長込理論株価 = 理論時価総額 ÷ 発行済株式数
  */
 import type { CalcResult } from '@/lib/types/calc';
 import { CALC_VERSION } from '@/lib/types/calc';
 import { roundYen, truncateYen, roundPercent } from './utils';
 
 /**
- * 事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)（DCF 永久成長モデル）
- *
- * r-g が 0 以下だとDCF式が発散するため、null を返す。
- * また、DCF 値が大きくなりすぎないよう、上限倍率（cap_multiplier）を適用する。
- * 上限値 = 営業利益 × cap_multiplier × (1-実効税率)
- * 最終的な事業価値 = min(DCF値, 上限値)
+ * 事業価値 = 営業利益 × 事業価値倍率（cap_multiplier、既定10倍）
+ * スプシ方式では税引き・DCF を行わず、営業利益の単純倍率で事業価値とする。
  */
 export function calcBusinessValue(
   operatingIncome: number,
-  taxRate: number,
-  discountRate: number,
-  growthRate: number,
   capMultiplier: number,
 ): CalcResult<number> {
-  const afterTaxIncome = operatingIncome * (1 - taxRate);
-  const rMinusG = discountRate - growthRate;
-
-  if (rMinusG <= 0) {
-    return {
-      value: null,
-      metadata: {
-        formula: '事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)（r ≤ g のため算出不可）',
-        inputs: [
-          { label: '営業利益', value: operatingIncome, field: 'operating_income' },
-          { label: '実効税率', value: taxRate, field: 'tax_rate' },
-          { label: '割引率', value: discountRate, field: 'discount_rate' },
-          { label: '成長率', value: growthRate, field: 'growth_rate' },
-        ],
-        rounding: '円未満四捨五入',
-        calcVersion: CALC_VERSION,
-      },
-    };
-  }
-
-  const dcfValue = afterTaxIncome / rMinusG;
-  const capValue = operatingIncome * capMultiplier * (1 - taxRate);
-  const value = roundYen(Math.min(dcfValue, capValue));
-  const capped = capValue < dcfValue;
-
   return {
-    value,
+    value: roundYen(operatingIncome * capMultiplier),
     metadata: {
-      formula: capped
-        ? '事業価値 = 営業利益 × 上限倍率 × (1-実効税率)（上限倍率適用）'
-        : '事業価値 = 営業利益 × (1-実効税率) ÷ (r-g)',
+      formula: '事業価値 = 営業利益 × 事業価値倍率',
       inputs: [
         { label: '営業利益', value: operatingIncome, field: 'operating_income' },
-        { label: '実効税率', value: taxRate, field: 'tax_rate' },
-        { label: '割引率', value: discountRate, field: 'discount_rate' },
-        { label: '成長率', value: growthRate, field: 'growth_rate' },
-        { label: '上限倍率', value: capMultiplier, field: 'cap_multiplier' },
+        { label: '事業価値倍率', value: capMultiplier, field: 'cap_multiplier' },
       ],
       rounding: '円未満四捨五入',
       calcVersion: CALC_VERSION,
@@ -73,50 +41,54 @@ export function calcBusinessValue(
 }
 
 /**
- * 現状資産価値 = 自己資本
- * equityField/equityLabel は呼び出し側（resolveEquity）が解決した
- * 「実際にどのカラムを使ったか」を計算根拠表示に残すための情報
+ * 財産価値 = 流動資産 − 流動負債 × 1.2 + 投資その他の資産
+ * 流動負債に1.2を掛けることで負債を保守的に見込む（グレアム型の純財産評価）。
+ * いずれかが未入力（null）なら算出不可。
  */
 export function calcAssetValue(
-  equity: number,
-  equityField: string = 'equity',
-  equityLabel: string = '自己資本',
+  currentAssets: number | null,
+  currentLiabilities: number | null,
+  investmentsAndOtherAssets: number | null,
 ): CalcResult<number> {
+  const value =
+    currentAssets == null || currentLiabilities == null || investmentsAndOtherAssets == null
+      ? null
+      : roundYen(currentAssets - currentLiabilities * 1.2 + investmentsAndOtherAssets);
   return {
-    value: equity,
+    value,
     metadata: {
-      formula: '資産価値 = 自己資本（株主資本優先、なければ純資産）',
-      inputs: [{ label: equityLabel, value: equity, field: equityField }],
-      rounding: 'なし（入力値そのまま）',
+      formula: '財産価値 = 流動資産 − 流動負債 × 1.2 + 投資その他の資産',
+      inputs: [
+        { label: '流動資産', value: currentAssets ?? 0, field: 'current_assets' },
+        { label: '流動負債', value: currentLiabilities ?? 0, field: 'current_liabilities' },
+        { label: '投資その他の資産', value: investmentsAndOtherAssets ?? 0, field: 'investments_and_other_assets' },
+      ],
+      rounding: '円未満四捨五入',
       calcVersion: CALC_VERSION,
     },
   };
 }
 
 /**
- * 現状理論株価 = (事業価値 + 資産価値 - 有利子負債) ÷ 発行済株式数
- * 円未満切捨て（Math.floor）
+ * 現状理論株価 = (事業価値 + 財産価値) ÷ 発行済株式数
+ * 円未満切捨て。有利子負債は控除しない（財産価値の流動負債×1.2 で負債を見込むため）。
  */
 export function calcTheoryPrice(
   businessValue: number,
   assetValue: number,
-  interestBearingDebt: number,
   sharesOutstanding: number | null,
 ): CalcResult<number> {
   const value =
     sharesOutstanding == null || sharesOutstanding === 0
       ? null
-      : truncateYen(
-          (businessValue + assetValue - interestBearingDebt) / sharesOutstanding,
-        );
+      : truncateYen((businessValue + assetValue) / sharesOutstanding);
   return {
     value,
     metadata: {
-      formula: '理論株価 = (事業価値 + 資産価値 - 有利子負債) ÷ 発行済株式数',
+      formula: '現状理論株価 = (事業価値 + 財産価値) ÷ 発行済株式数',
       inputs: [
         { label: '事業価値', value: businessValue, field: 'business_value（算出値）' },
-        { label: '資産価値', value: assetValue, field: 'asset_value（算出値）' },
-        { label: '有利子負債', value: interestBearingDebt, field: 'interest_bearing_debt' },
+        { label: '財産価値', value: assetValue, field: 'asset_value（算出値）' },
         { label: '発行済株式数', value: sharesOutstanding ?? 0, field: 'shares_outstanding' },
       ],
       rounding: '円未満切捨て',
@@ -126,20 +98,27 @@ export function calcTheoryPrice(
 }
 
 /**
- * 成長込理論株価 — 上限倍率を適用せず、DCF 式のみで事業価値を算出した場合の理論株価
- * 成長率 g をフルに反映する
+ * 成長込理論株価（PER割引方式）
+ *   理論PER = 1/(r−g) → 5年後理論時価総額 = 6年目純利益予測 × 理論PER
+ *   → 理論時価総額 = 5年後 ÷ (1+r)^5 → ÷ 発行済株式数
+ * 6年目純利益予測が未入力、r−g≤0、株式数なしの場合は算出不可。
  */
 export function calcGrowthTheoryPrice(
-  operatingIncome: number,
-  taxRate: number,
+  projectedNetIncome: number | null,
   discountRate: number,
   growthRate: number,
-  equity: number,
-  interestBearingDebt: number,
   sharesOutstanding: number | null,
 ): CalcResult<number> {
   const rMinusG = discountRate - growthRate;
+  const baseInputs = [
+    { label: '6年目純利益予測', value: projectedNetIncome ?? 0, field: 'projected_net_income' },
+    { label: '割引率', value: discountRate, field: 'discount_rate' },
+    { label: '成長率', value: growthRate, field: 'growth_rate' },
+    { label: '発行済株式数', value: sharesOutstanding ?? 0, field: 'shares_outstanding' },
+  ];
+
   if (
+    projectedNetIncome == null ||
     rMinusG <= 0 ||
     sharesOutstanding == null ||
     sharesOutstanding === 0
@@ -147,35 +126,24 @@ export function calcGrowthTheoryPrice(
     return {
       value: null,
       metadata: {
-        formula: '成長込理論株価 = (事業価値DCF + 資産価値 - 有利子負債) ÷ 発行済株式数',
-        inputs: [
-          { label: '営業利益', value: operatingIncome, field: 'operating_income' },
-          { label: '割引率', value: discountRate, field: 'discount_rate' },
-          { label: '成長率', value: growthRate, field: 'growth_rate' },
-        ],
+        formula: '成長込理論株価 = 6年目純利益予測 × 1/(r−g) ÷ (1+r)^5 ÷ 発行済株式数（算出不可）',
+        inputs: baseInputs,
         rounding: '円未満切捨て',
         calcVersion: CALC_VERSION,
       },
     };
   }
 
-  const businessValueDCF = operatingIncome * (1 - taxRate) / rMinusG;
-  const value = truncateYen(
-    (businessValueDCF + equity - interestBearingDebt) / sharesOutstanding,
-  );
+  const theoryPER = 1 / rMinusG;
+  const futureMarketCap = projectedNetIncome * theoryPER; // 5年後理論時価総額
+  const presentMarketCap = futureMarketCap / Math.pow(1 + discountRate, 5);
+  const value = truncateYen(presentMarketCap / sharesOutstanding);
+
   return {
     value,
     metadata: {
-      formula: '成長込理論株価 = (営業利益×(1-実効税率)÷(r-g) + 資産価値 - 有利子負債) ÷ 発行済株式数',
-      inputs: [
-        { label: '営業利益', value: operatingIncome, field: 'operating_income' },
-        { label: '実効税率', value: taxRate, field: 'tax_rate' },
-        { label: '割引率', value: discountRate, field: 'discount_rate' },
-        { label: '成長率', value: growthRate, field: 'growth_rate' },
-        { label: '自己資本', value: equity, field: 'equity' },
-        { label: '有利子負債', value: interestBearingDebt, field: 'interest_bearing_debt' },
-        { label: '発行済株式数', value: sharesOutstanding, field: 'shares_outstanding' },
-      ],
+      formula: '成長込理論株価 = 6年目純利益予測 × 1/(r−g) ÷ (1+r)^5 ÷ 発行済株式数',
+      inputs: baseInputs,
       rounding: '円未満切捨て',
       calcVersion: CALC_VERSION,
     },

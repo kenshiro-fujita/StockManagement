@@ -18,6 +18,7 @@ const params: ParametersRow = {
   growth_rate: 0.02,
   tax_rate: 0.3,
   cap_multiplier: 10,
+  projected_net_income: 500_000_000,
 };
 
 /** 全フィールド null のベース値 */
@@ -34,6 +35,9 @@ const empty: GridValues = {
   interest_expense: null,
   current_stock_price: null,
   shareholders_equity: null,
+  current_assets: null,
+  current_liabilities: null,
+  investments_and_other_assets: null,
 };
 
 function indicator(key: string) {
@@ -73,31 +77,20 @@ describe('理論株価チェーン（C-7: エンジンとの一致）', () => {
     interest_bearing_debt: 200_000_000,
     shares_outstanding: 1_000_000,
     current_stock_price: 300,
+    current_assets: 800_000_000,
+    current_liabilities: 300_000_000,
+    investments_and_other_assets: 200_000_000,
   };
 
   it('グリッドの理論株価はエンジンの計算結果と一致する', () => {
-    const bv = calcBusinessValue(
-      v.operating_income!,
-      params.tax_rate,
-      params.discount_rate,
-      params.growth_rate,
-      params.cap_multiplier,
-    ).value!;
-    const expected = calcTheoryPrice(bv, v.equity!, v.interest_bearing_debt!, v.shares_outstanding).value!;
+    const bv = calcBusinessValue(v.operating_income!, params.cap_multiplier).value!;
+    const expected = calcTheoryPrice(bv, 640_000_000, v.shares_outstanding).value!;
     expect(indicator('theory_price').calc(v, params)).toBe(expected.toLocaleString());
   });
 
-  it('株主資本があれば純資産より優先される（C-9 と同方針）', () => {
+  it('株主資本ではなく財産価値の入力を使用する', () => {
     const withSE: GridValues = { ...v, shareholders_equity: 400_000_000 };
-    const bv = calcBusinessValue(
-      v.operating_income!,
-      params.tax_rate,
-      params.discount_rate,
-      params.growth_rate,
-      params.cap_multiplier,
-    ).value!;
-    const expected = calcTheoryPrice(bv, 400_000_000, v.interest_bearing_debt!, v.shares_outstanding).value!;
-    expect(indicator('theory_price').calc(withSE, params)).toBe(expected.toLocaleString());
+    expect(indicator('theory_price').calc(withSE, params)).toBe('1,640');
   });
 });
 
@@ -110,6 +103,9 @@ describe('負の理論株価（C-5 のガードがグリッドにも効く）', 
     interest_bearing_debt: 1_500_000_000,
     shares_outstanding: 1_000_000,
     current_stock_price: 50,
+    current_assets: 100_000_000,
+    current_liabilities: 1_000_000_000,
+    investments_and_other_assets: 0,
   };
 
   it('安全率は null（符号反転の誤判定を返さない）', () => {

@@ -99,9 +99,9 @@ const distressedRow: FullFinancialDataRow = {
   interest_expense: null,
   current_stock_price: 50,
   cash_and_equivalents: null,
-  current_assets: null,
-  investments_and_other_assets: null,
-  current_liabilities: null,
+  current_assets: 100_000_000,
+  investments_and_other_assets: 0,
+  current_liabilities: 1_000_000_000,
   non_current_liabilities: null,
   shareholders_equity: null,
   beta: null,
@@ -115,13 +115,14 @@ const testParams: ParametersRow = {
   growth_rate: 0.02,
   tax_rate: 0.3,
   cap_multiplier: 10,
+  projected_net_income: null,
 };
 
 describe('統合: 債務超過的な銘柄（負の理論株価）', () => {
   const results = calculateAllIndicators([distressedRow], testParams);
   const p = results.period;
 
-  it('理論株価は負になる（事業価値+資産価値 < 有利子負債）', () => {
+  it('理論株価は負になる（事業価値+財産価値 < 0）', () => {
     expect(p.theoryPrice.value).not.toBeNull();
     expect(p.theoryPrice.value!).toBeLessThan(0);
   });

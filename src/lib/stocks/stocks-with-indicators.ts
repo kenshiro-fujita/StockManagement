@@ -57,7 +57,7 @@ export const getStocksWithIndicators = cache(async (): Promise<StockIndicatorDat
         .order('fiscal_year', { ascending: false }),
       supabase
         .from('parameters')
-        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier'),
+        .select('id, stock_id, discount_rate, growth_rate, tax_rate, cap_multiplier, projected_net_income'),
     ]);
 
   if (!stocks || stocks.length === 0) return [];
@@ -79,6 +79,7 @@ export const getStocksWithIndicators = cache(async (): Promise<StockIndicatorDat
       growth_rate: Number(p.growth_rate),
       tax_rate: Number(p.tax_rate),
       cap_multiplier: Number(p.cap_multiplier),
+      projected_net_income: p.projected_net_income == null ? null : Number(p.projected_net_income),
     });
   }
 

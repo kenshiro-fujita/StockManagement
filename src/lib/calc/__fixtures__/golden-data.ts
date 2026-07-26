@@ -19,6 +19,7 @@ export const GOLDEN_PARAMETERS: ParametersRow = {
   growth_rate: 0.02,
   tax_rate: 0.3,
   cap_multiplier: 10,
+  projected_net_income: 5_000_000_000, // 6年目純利益予測 50億円
 };
 
 /** 3期分の財務データ（降順: 2024→2023→2022） */
@@ -41,9 +42,9 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
     interest_expense: 200_000_000,      // 2億円
     current_stock_price: 250,           // 250円/株
     cash_and_equivalents: null,
-    current_assets: null,
-    investments_and_other_assets: null,
-    current_liabilities: null,
+    current_assets: 18_000_000_000,
+    investments_and_other_assets: 8_000_000_000,
+    current_liabilities: 5_000_000_000,
     non_current_liabilities: null,
     shareholders_equity: null,
     beta: null,
@@ -133,29 +134,25 @@ export const GOLDEN_FINANCIAL_DATA: FullFinancialDataRow[] = [
  * - PBR = 250 × 100,000,000 ÷ 20,000,000,000 = 1.25倍
  *
  * 【理論価値】
- * - 事業価値 基本式: 5,000,000,000 × 0.7 ÷ 0.06 = 58,333,333,333
- * - 事業価値 上限: 5,000,000,000 × 10 × 0.7 = 35,000,000,000
- * - → min(58.3B, 35B) = 35,000,000,000（上限倍率適用）
- * - 資産価値 = 20,000,000,000
- * - 現状理論株価 = (35,000,000,000 + 20,000,000,000 - 8,000,000,000) ÷ 100,000,000 = 470 → floor = 470
- *
- * - 成長込事業価値(DCF) = 5,000,000,000 × 0.7 ÷ 0.06 = 58,333,333,333
- * - 成長込理論株価 = (58,333,333,333 + 20,000,000,000 - 8,000,000,000) ÷ 100,000,000
- *                   = 70,333,333,333 ÷ 100,000,000 = 703.33... → floor = 703
+ * - 事業価値 = 5,000,000,000 × 10 = 50,000,000,000
+ * - 財産価値 = 18,000,000,000 - 5,000,000,000 × 1.2 + 8,000,000,000 = 20,000,000,000
+ * - 現状理論株価 = (50,000,000,000 + 20,000,000,000) ÷ 100,000,000 = 700
+ * - 成長込理論株価 = 5,000,000,000 × 1/(0.08-0.02) ÷ (1.08)^5 ÷ 100,000,000
+ *                   = 567.19... → 567
  *
  * 【理論PER系】
- * - 理論時価総額 = 470 × 100,000,000 = 47,000,000,000
- * - 理論PER = 47,000,000,000 ÷ 3,000,000,000 = 15.67倍
- * - 5年後理論時価総額 = 47,000,000,000 × (1.02)^5 = 51,892,145,794
+ * - 理論時価総額 = 700 × 100,000,000 = 70,000,000,000
+ * - 理論PER = 70,000,000,000 ÷ 3,000,000,000 = 23.33倍
+ * - 5年後理論時価総額 = 70,000,000,000 × (1.02)^5 = 77,285,656,224
  * - 6年目当期純利益 = 3,000,000,000 × (1.02)^5 = 3,312,242,413
  *
  * 【安全性】
- * - 安全域（現状） = 470 - 250 = 220
- * - 安全域（成長込） = 703 - 250 = 453
- * - 安全率（現状） = (470 - 250) ÷ 470 × 100 = 46.81%
- * - 安全率（成長込） = (703 - 250) ÷ 703 × 100 = 64.44%
- * - 理想購入株価（対現状） = 470 × 0.5 = 235 → floor = 235
- * - 理想購入株価（対成長） = 703 × 0.5 = 351.5 → floor = 351
+ * - 安全域（現状） = 700 - 250 = 450
+ * - 安全域（成長込） = 567 - 250 = 317
+ * - 安全率（現状） = (700 - 250) ÷ 700 × 100 = 64.29%
+ * - 安全率（成長込） = (567 - 250) ÷ 567 × 100 = 55.91%
+ * - 理想購入株価（対現状） = 700 × 0.5 = 350
+ * - 理想購入株価（対成長） = 567 × 0.5 = 283.5 → 283
  *
  * 【移動平均ROIC（3期分）】
  * - FY2024 ROIC = 12.5%
@@ -189,24 +186,24 @@ export const GOLDEN_EXPECTED = {
   pbr: 1.25,
 
   // 理論価値
-  businessValue: 35_000_000_000,
+  businessValue: 50_000_000_000,
   assetValue: 20_000_000_000,
-  theoryPrice: 470,
-  growthTheoryPrice: 703,
+  theoryPrice: 700,
+  growthTheoryPrice: 567,
 
   // 理論PER系
-  theoryMarketCap: 47_000_000_000,
-  theoryPER: 15.67,
-  futureTheoryMarketCap: Math.round(47_000_000_000 * Math.pow(1.02, 5)),
+  theoryMarketCap: 70_000_000_000,
+  theoryPER: 23.33,
+  futureTheoryMarketCap: Math.round(70_000_000_000 * Math.pow(1.02, 5)),
   futureNetIncome: Math.round(3_000_000_000 * Math.pow(1.02, 5)),
 
   // 安全性
-  safetyMarginCurrent: 220,
-  safetyMarginGrowth: 453,
-  safetyRateCurrent: 46.81,
-  safetyRateGrowth: 64.44,
-  idealBuyPriceCurrent: 235,
-  idealBuyPriceGrowth: 351,
+  safetyMarginCurrent: 450,
+  safetyMarginGrowth: 317,
+  safetyRateCurrent: 64.29,
+  safetyRateGrowth: 55.91,
+  idealBuyPriceCurrent: 350,
+  idealBuyPriceGrowth: 283,
 
   // 移動平均ROIC
   movingAverageROIC: 11.21,
