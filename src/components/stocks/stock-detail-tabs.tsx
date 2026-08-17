@@ -15,8 +15,21 @@ type StockDetailTab =
   | 'transactions'
   | 'financial'
   | 'parameters'
-  | 'edinet'
   | 'ai-research';
+
+/**
+ * 常に公開するタブを一か所に集約します。
+ *
+ * 表示順とタブ名が別々に管理されると、導線を変更した際にトリガーだけが
+ * 古いまま残るため、トリガーの描画と回帰テストで同じ定義を利用します。
+ */
+export const STOCK_DETAIL_PUBLIC_TABS = [
+  { value: 'overview', label: '概要' },
+  { value: 'theory-price', label: '理論株価' },
+  { value: 'transactions', label: '取引・損益' },
+  { value: 'financial', label: '財務データ' },
+  { value: 'parameters', label: 'パラメータ' },
+] as const satisfies readonly { value: StockDetailTab; label: string }[];
 
 function PersistentTabPanel({
   children,
@@ -46,7 +59,6 @@ export function StockDetailTabs({
   transactionContent,
   financialContent,
   parametersContent,
-  edinetContent,
   aiResearchContent,
   defaultTab = 'overview',
 }: {
@@ -55,7 +67,6 @@ export function StockDetailTabs({
   transactionContent: ReactNode;
   financialContent: ReactNode;
   parametersContent: ReactNode;
-  edinetContent?: ReactNode;
   aiResearchContent?: ReactNode;
   defaultTab?: StockDetailTab;
 }) {
@@ -77,12 +88,11 @@ export function StockDetailTabs({
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange}>
       <TabsList className="max-w-full justify-start overflow-x-auto">
-        <TabsTrigger value="overview">概要</TabsTrigger>
-        <TabsTrigger value="theory-price">理論株価</TabsTrigger>
-        <TabsTrigger value="transactions">取引・損益</TabsTrigger>
-        <TabsTrigger value="financial">財務データ</TabsTrigger>
-        <TabsTrigger value="parameters">パラメータ</TabsTrigger>
-        {edinetContent && <TabsTrigger value="edinet">EDINET</TabsTrigger>}
+        {STOCK_DETAIL_PUBLIC_TABS.map(({ value, label }) => (
+          <TabsTrigger key={value} value={value}>
+            {label}
+          </TabsTrigger>
+        ))}
         {aiResearchContent && (
           <TabsTrigger value="ai-research">AI調査</TabsTrigger>
         )}
@@ -117,11 +127,6 @@ export function StockDetailTabs({
       >
         {parametersContent}
       </PersistentTabPanel>
-      {edinetContent && (
-        <PersistentTabPanel mounted={visitedTabs.has('edinet')} value="edinet">
-          {edinetContent}
-        </PersistentTabPanel>
-      )}
       {aiResearchContent && (
         <PersistentTabPanel
           mounted={visitedTabs.has('ai-research')}

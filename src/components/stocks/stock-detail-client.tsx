@@ -21,7 +21,6 @@ import { StockDetailTabs } from '@/components/stocks/stock-detail-tabs';
 import { TheoryPriceSection } from '@/components/stocks/theory-price-section';
 import { FinancialDataSection } from '@/components/stocks/financial-data-section';
 import { ParameterSection } from '@/components/stocks/parameter-section';
-import { EdinetSearch } from '@/components/stocks/edinet-search';
 import { AIResearchSection } from '@/components/stocks/ai-research-section';
 import { TransactionSection } from '@/components/stocks/transaction-section';
 import type { TransactionRow } from '@/lib/types/transactions';
@@ -86,6 +85,7 @@ export function StockDetailClient({
       financialContent={
         <FinancialDataSection
           stockId={stockId}
+          stockCode={stockCode}
           financialData={financialData}
           parameters={parameters}
         />
@@ -97,7 +97,6 @@ export function StockDetailClient({
           onParametersChange={handleParametersChange}
         />
       }
-      edinetContent={<EdinetSearch stockId={stockId} stockCode={stockCode} />}
       aiResearchContent={<AIResearchSection stockId={stockId} />}
     />
   );

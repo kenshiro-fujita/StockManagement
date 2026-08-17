@@ -47,7 +47,9 @@ function TheoryPriceEmpty() {
           （必須: 売上高、営業利益、純利益、総資産、自己資本、発行済株式数）
         </li>
         <li>2. 「パラメータ」タブで割引率・成長率・実効税率を設定する</li>
-        <li className="ml-4 text-xs">（EDINETタブから自動取得も可能です）</li>
+        <li className="ml-4 text-xs">
+          （財務データタブ内のEDINET取込も利用できます）
+        </li>
       </ul>
     </div>
   );
